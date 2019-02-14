@@ -50,9 +50,14 @@ export class OrderInfoCommand extends Command {
         provider.stop();
     }
     private _renderConsole(output: Output): void {
-        console.log(output.orderInfo.orderHash);
         const printUtils = new PrintUtils(this._web3Wrapper, this._contractWrappers, {}, {});
+        PrintUtils.printData('Orderhash', [[output.orderInfo.orderHash]]);
+        PrintUtils.printData('Remaining', [[output.orderInfo.orderTakerAssetFilledAmount]]);
         printUtils.printOrderInfos({ order: output.orderInfo });
+        if (output.balanceAndAllowance) {
+            PrintUtils.printData('Balance', [[output.balanceAndAllowance.balance.toString()]]);
+            PrintUtils.printData('Allowance', [[output.balanceAndAllowance.allowance.toString()]]);
+        }
     }
     // tslint:disable-next-line:prefer-function-over-method
     private _renderJSON(output: Output): void {
