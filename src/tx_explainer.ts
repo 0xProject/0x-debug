@@ -1,5 +1,7 @@
 // Decodes any 0x transaction
-import { ContractWrappers, Order } from '0x.js';
+import { OrderValidatorContract } from '@0x/abi-gen-wrappers';
+import { ContractWrappers } from '@0x/contract-wrappers';
+import { Order, SignedOrder } from '@0x/types';
 import { AbiDecoder, BigNumber, DecodedCalldata } from '@0x/utils';
 import { Web3Wrapper } from '@0x/web3-wrapper';
 import {
@@ -27,6 +29,7 @@ interface ExplainedTransaction {
     gasUsed?: number;
     value?: BigNumber;
     txReceipt: TransactionReceipt;
+    blockNumber: number;
 }
 export const txExplainerUtils = {
     async explainTransactionAsync(
@@ -73,6 +76,7 @@ export const txExplainerUtils = {
             );
         }
         return {
+            blockNumber,
             success: isSuccess,
             txHash,
             value: tx.value,
@@ -155,6 +159,7 @@ export class TxExplainer {
         web3Wrapper.abiDecoder.addABI(this._contractWrappers.erc721Token.abi);
         this._web3Wrapper = web3Wrapper;
     }
+    public async detectErrors(): Promise<void> {}
 
     public async explainTransactionAsync(txHash: string): Promise<void> {
         if (_.isUndefined(txHash)) {
@@ -175,7 +180,6 @@ export class TxExplainer {
         printUtils.printTransaction(decodedTx.decodedInput.functionName, decodedTx.txReceipt, additionalInfo);
         _.forEach(orders, order => printUtils.printOrder(order));
         PrintUtils.printData('arguments', Object.entries(decodedTx.decodedInput.functionArguments));
-        console.log(JSON.stringify(orders, null, 2));
         await printUtils.fetchAndPrintContractBalancesAsync(decodedTx.txReceipt.blockNumber);
         await printUtils.fetchAndPrintContractAllowancesAsync(decodedTx.txReceipt.blockNumber);
     }
@@ -190,15 +194,19 @@ export class TxExplainer {
         );
         const inputArguments = decodedTx.decodedInput.functionArguments;
         const orders: Order[] = utils.extractOrders(inputArguments);
-        const exchangeAddress = this._contractWrappers.exchange.address;
         const { accounts, tokens } = utils.extractAccountsAndTokens(orders);
-        const signature =
-            '0x1b0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000003';
-        const normalizedOrders = _.map(orders, o => ({ ...o, exchangeAddress, signature }));
+        // const exchangeAddress = this._contractWrappers.exchange.address;
+        // const signature =
+        //     '0x1b0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000003';
+        // const normalizedOrders = _.map(orders, o => ({ ...o, exchangeAddress, signature }));
         const taker = decodedTx.txReceipt.from;
-        const orderAndTraderInfo = await this._contractWrappers.orderValidator.getOrdersAndTradersInfoAsync(
-            normalizedOrders as any,
+        const contract: OrderValidatorContract = await (this._contractWrappers
+            .orderValidator as any)._getOrderValidatorContractAsync();
+        const orderAndTraderInfo = await contract.getOrdersAndTradersInfo.callAsync(
+            orders as SignedOrder[],
             _.map(orders, o => taker),
+            {},
+            decodedTx.blockNumber,
         );
         const output = {
             accounts: {

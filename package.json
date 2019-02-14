@@ -29,6 +29,8 @@
         "globby": "^8",
         "mocha": "^5",
         "nyc": "^13",
+        "parcel": "^1.11.0",
+        "parcel-plugin-zip": "^1.0.6",
         "ts-node": "^8",
         "tslint": "^5",
         "typescript": "^3.2"
@@ -57,6 +59,7 @@
     },
     "repository": "dekz/0x-debug",
     "scripts": {
+        "build:lambda": "yarn parcel build functions/explain/index.ts --target=node --global handler -o index.js --bundle-node-modules --no-source-maps",
         "postpack": "rm -f oclif.manifest.json",
         "posttest": "tslint -p test -t stylish",
         "prepack": "rm -rf lib && tsc -b && oclif-dev manifest && oclif-dev readme",

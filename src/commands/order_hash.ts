@@ -1,4 +1,6 @@
-import { ContractWrappers, orderHashUtils, RPCSubprovider, signatureUtils, Web3ProviderEngine } from '0x.js';
+// import { ContractWrappers, orderHashUtils, signatureUtils, } from '0x.js';
+import { ContractWrappers } from '@0x/contract-wrappers';
+import { orderHashUtils, signatureUtils } from '@0x/order-utils';
 import { Web3Wrapper } from '@0x/web3-wrapper';
 import { Command, flags } from '@oclif/command';
 

@@ -1,4 +1,4 @@
-import { BalanceAndAllowance, ContractWrappers, orderHashUtils, OrderInfo } from '0x.js';
+import { BalanceAndAllowance, ContractWrappers, OrderInfo } from '@0x/contract-wrappers';
 import { Web3Wrapper } from '@0x/web3-wrapper';
 import { Command, flags } from '@oclif/command';
 

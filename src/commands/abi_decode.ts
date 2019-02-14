@@ -1,6 +1,5 @@
-import { ContractWrappers } from '0x.js';
 import { AssetProxyOwner, ERC20Proxy, Exchange, Forwarder } from '@0x/contract-artifacts';
-import { Web3Wrapper } from '@0x/web3-wrapper';
+import { ContractWrappers } from '@0x/contract-wrappers';
 import { Command, flags } from '@oclif/command';
 
 import { defaultFlags } from '../global_flags';

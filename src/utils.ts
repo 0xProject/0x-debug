@@ -1,5 +1,10 @@
-import { assetDataUtils, ERC20AssetData, Order, RPCSubprovider, Web3ProviderEngine } from '0x.js';
+import { assetDataUtils } from '@0x/order-utils';
+import { ERC20AssetData, Order, SignedOrder } from '@0x/types';
 import _ = require('lodash');
+// import { RPCSubprovider, Web3ProviderEngine } from '@0x/subproviders';
+// tslint:disable-next-line:no-implicit-dependencies
+const Web3ProviderEngine = require('web3-provider-engine');
+const RpcSubprovider = require('web3-provider-engine/subproviders/rpc.js');
 enum Networks {
     Mainnet = 1,
     Goerli = 5,
@@ -24,9 +29,9 @@ export const utils = {
         }
         return networkId;
     },
-    getProvider(flags: any): Web3ProviderEngine {
+    getProvider(flags: any): any {
         const networkId = utils.getNetworkId(flags);
-        const rpcSubprovider = new RPCSubprovider(utils.getNetworkRPCOrThrow(networkId));
+        const rpcSubprovider = new RpcSubprovider({ rpcUrl: utils.getNetworkRPCOrThrow(networkId) });
         const provider = new Web3ProviderEngine();
         provider.addProvider(rpcSubprovider);
         provider.start();
@@ -39,14 +44,19 @@ export const utils = {
         }
         return url;
     },
-    extractOrders(inputArguments: any): Order[] {
-        const orders: Order[] = [];
+    extractOrders(inputArguments: any): Order[] | SignedOrder[] {
+        let orders: Order[] = [];
         if (inputArguments.order) {
             orders.push(inputArguments.order);
         } else if (inputArguments.orders) {
-            _.forEach(inputArguments.orders, (order, index) => {
-                orders.push(order);
-            });
+            console.log('got many orders');
+            orders = inputArguments.orders;
+            if (inputArguments.signatures) {
+                console.log('got signatures');
+                _.forEach(orders, (order, index) => {
+                    (order as SignedOrder).signature = inputArguments.signatures[index];
+                });
+            }
         }
         return orders;
     },
