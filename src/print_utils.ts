@@ -1,4 +1,6 @@
-import { BigNumber, ContractWrappers, Order, OrderInfo, OrderStatus, SignedOrder } from '0x.js';
+// import { BigNumber, ContractWrappers, Order, OrderInfo, OrderStatus, SignedOrder } from '0x.js';
+import { ContractWrappers, OrderInfo, OrderStatus, SignedOrder } from '@0x/contract-wrappers';
+import { BigNumber } from '@0x/utils';
 import { Web3Wrapper } from '@0x/web3-wrapper';
 import {
     BlockParam,

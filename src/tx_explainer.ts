@@ -183,6 +183,45 @@ export class TxExplainer {
         await printUtils.fetchAndPrintContractBalancesAsync(decodedTx.txReceipt.blockNumber);
         await printUtils.fetchAndPrintContractAllowancesAsync(decodedTx.txReceipt.blockNumber);
     }
+    public async explainTransactionJSONNoPrintAsync(txHash: string): Promise<any> {
+        if (_.isUndefined(txHash)) {
+            throw new Error('txHash must be defined');
+        }
+        const decodedTx = await txExplainerUtils.explainTransactionAsync(
+            this._web3Wrapper,
+            txHash,
+            this._contractWrappers.getAbiDecoder(),
+        );
+        const inputArguments = decodedTx.decodedInput.functionArguments;
+        const orders: Order[] = utils.extractOrders(inputArguments);
+        const { accounts, tokens } = utils.extractAccountsAndTokens(orders);
+        // const exchangeAddress = this._contractWrappers.exchange.address;
+        // const signature =
+        //     '0x1b0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000003';
+        // const normalizedOrders = _.map(orders, o => ({ ...o, exchangeAddress, signature }));
+        const taker = decodedTx.txReceipt.from;
+        const contract: OrderValidatorContract = await (this._contractWrappers
+            .orderValidator as any)._getOrderValidatorContractAsync();
+        const orderAndTraderInfo = await contract.getOrdersAndTradersInfo.callAsync(
+            orders as SignedOrder[],
+            _.map(orders, o => taker),
+            {},
+            decodedTx.blockNumber,
+        );
+        const output = {
+            accounts: {
+                ...accounts,
+                taker: decodedTx.txReceipt.from,
+            },
+            tokens,
+            orders,
+            orderAndTraderInfo,
+            logs: decodedTx.decodedLogs,
+            revertReason: decodedTx.revertReason,
+            tx: txHash,
+        };
+        return output;
+    }
     public async explainTransactionJSONAsync(txHash: string): Promise<void> {
         if (_.isUndefined(txHash)) {
             throw new Error('txHash must be defined');

@@ -3,6 +3,6 @@
     "description": "explain",
     "runtime": "nodejs8.10",
     "memory": 128,
-    "timeout": 5,
+    "timeout": 10,
     "role": "arn:aws:iam::883408475785:role/aws-lambda-default"
 }

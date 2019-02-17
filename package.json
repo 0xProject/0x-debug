@@ -7,7 +7,9 @@
     },
     "bugs": "https://github.com/dekz/0x-debug/issues",
     "dependencies": {
-        "0x.js": "^5.0.0",
+        "@0x/contract-wrappers": "^7.1.0",
+        "@0x/order-utils": "^6.1.0",
+        "@0x/types": "^2.0.2",
         "@0x/web3-wrapper": "^5.0.0",
         "@oclif/command": "^1",
         "@oclif/config": "^1",
@@ -59,7 +61,8 @@
     },
     "repository": "dekz/0x-debug",
     "scripts": {
-        "build:lambda": "yarn parcel build functions/explain/index.ts --target=node --global handler -o index.js --bundle-node-modules --no-source-maps",
+        "build:lambda": "yarn parcel build functions/explain/index.ts --target=node --global handle -o index.js --bundle-node-modules --no-source-maps",
+        "deploy:lambda": "apex deploy explain --zip dist.zip",
         "postpack": "rm -f oclif.manifest.json",
         "posttest": "tslint -p test -t stylish",
         "prepack": "rm -rf lib && tsc -b && oclif-dev manifest && oclif-dev readme",
