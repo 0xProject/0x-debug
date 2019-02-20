@@ -10,7 +10,7 @@ export const handle = async (event, _ctx, _cb): Promise<any> => {
     // Hack to prevent block polling
     (provider as any)._ready.go();
     const explainer = new TxExplainer(provider, networkId);
-    const result = await explainer.explainTransactionJSONNoPrintAsync(txHash);
+    const result = await explainer.explainTransactionAsync(txHash);
     provider.stop();
     const httpResponse = {
         isBase64Encoded: false,
