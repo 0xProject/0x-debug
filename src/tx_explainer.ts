@@ -1,6 +1,6 @@
 // Decodes any 0x transaction
 import { OrderValidatorContract } from '@0x/abi-gen-wrappers';
-import { ContractWrappers } from '@0x/contract-wrappers';
+import { ContractWrappers, OrderAndTraderInfo } from '@0x/contract-wrappers';
 import { Order, SignedOrder } from '@0x/types';
 import { AbiDecoder, BigNumber, DecodedCalldata } from '@0x/utils';
 import { Web3Wrapper } from '@0x/web3-wrapper';
@@ -16,6 +16,7 @@ import {
 import * as _ from 'lodash';
 
 import { PrintUtils } from './print_utils';
+import { ExplainedTransactionOutput } from './types';
 import { utils } from './utils';
 
 const ERROR_PREFIX = '08c379a0';
@@ -159,9 +160,8 @@ export class TxExplainer {
         web3Wrapper.abiDecoder.addABI(this._contractWrappers.erc721Token.abi);
         this._web3Wrapper = web3Wrapper;
     }
-    public async detectErrors(): Promise<void> {}
 
-    public async explainTransactionAsync(txHash: string): Promise<void> {
+    public async explainTransactionAsync(txHash: string): Promise<ExplainedTransactionOutput> {
         if (_.isUndefined(txHash)) {
             throw new Error('txHash must be defined');
         }
@@ -173,41 +173,24 @@ export class TxExplainer {
         const inputArguments = decodedTx.decodedInput.functionArguments;
         const orders: Order[] = utils.extractOrders(inputArguments);
         const { accounts, tokens } = utils.extractAccountsAndTokens(orders);
-        accounts.taker = decodedTx.txReceipt.from;
-        const printUtils = new PrintUtils(this._web3Wrapper, this._contractWrappers, accounts, tokens);
-        const additionalInfo = decodedTx.revertReason ? [['Reason', decodedTx.revertReason]] : [];
-        printUtils.printAccounts();
-        printUtils.printTransaction(decodedTx.decodedInput.functionName, decodedTx.txReceipt, additionalInfo);
-        _.forEach(orders, order => printUtils.printOrder(order));
-        PrintUtils.printData('arguments', Object.entries(decodedTx.decodedInput.functionArguments));
-        await printUtils.fetchAndPrintContractBalancesAsync(decodedTx.txReceipt.blockNumber);
-        await printUtils.fetchAndPrintContractAllowancesAsync(decodedTx.txReceipt.blockNumber);
-    }
-    public async explainTransactionJSONNoPrintAsync(txHash: string): Promise<any> {
-        if (_.isUndefined(txHash)) {
-            throw new Error('txHash must be defined');
-        }
-        const decodedTx = await txExplainerUtils.explainTransactionAsync(
-            this._web3Wrapper,
-            txHash,
-            this._contractWrappers.getAbiDecoder(),
-        );
-        const inputArguments = decodedTx.decodedInput.functionArguments;
-        const orders: Order[] = utils.extractOrders(inputArguments);
-        const { accounts, tokens } = utils.extractAccountsAndTokens(orders);
-        // const exchangeAddress = this._contractWrappers.exchange.address;
-        // const signature =
-        //     '0x1b0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000003';
-        // const normalizedOrders = _.map(orders, o => ({ ...o, exchangeAddress, signature }));
         const taker = decodedTx.txReceipt.from;
         const contract: OrderValidatorContract = await (this._contractWrappers
             .orderValidator as any)._getOrderValidatorContractAsync();
-        const orderAndTraderInfo = await contract.getOrdersAndTradersInfo.callAsync(
+        const ordersAndTradersInfo = await contract.getOrdersAndTradersInfo.callAsync(
             orders as SignedOrder[],
-            _.map(orders, o => taker),
+            _.map(orders, _o => taker),
             {},
             decodedTx.blockNumber,
         );
+        const orderInfos = ordersAndTradersInfo[0];
+        const traderInfos = ordersAndTradersInfo[1];
+        const orderAndTraderInfo = _.map(orderInfos, (orderInfo, index) => {
+            const traderInfo = traderInfos[index];
+            return {
+                orderInfo,
+                traderInfo,
+            };
+        });
         const output = {
             accounts: {
                 ...accounts,
@@ -218,47 +201,12 @@ export class TxExplainer {
             orderAndTraderInfo,
             logs: decodedTx.decodedLogs,
             revertReason: decodedTx.revertReason,
+            functionName: decodedTx.decodedInput.functionName,
             tx: txHash,
+            txStatus: decodedTx.txReceipt.status,
+            gasUsed: decodedTx.txReceipt.gasUsed,
+            blockNumber: decodedTx.txReceipt.blockNumber,
         };
         return output;
-    }
-    public async explainTransactionJSONAsync(txHash: string): Promise<void> {
-        if (_.isUndefined(txHash)) {
-            throw new Error('txHash must be defined');
-        }
-        const decodedTx = await txExplainerUtils.explainTransactionAsync(
-            this._web3Wrapper,
-            txHash,
-            this._contractWrappers.getAbiDecoder(),
-        );
-        const inputArguments = decodedTx.decodedInput.functionArguments;
-        const orders: Order[] = utils.extractOrders(inputArguments);
-        const { accounts, tokens } = utils.extractAccountsAndTokens(orders);
-        // const exchangeAddress = this._contractWrappers.exchange.address;
-        // const signature =
-        //     '0x1b0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000003';
-        // const normalizedOrders = _.map(orders, o => ({ ...o, exchangeAddress, signature }));
-        const taker = decodedTx.txReceipt.from;
-        const contract: OrderValidatorContract = await (this._contractWrappers
-            .orderValidator as any)._getOrderValidatorContractAsync();
-        const orderAndTraderInfo = await contract.getOrdersAndTradersInfo.callAsync(
-            orders as SignedOrder[],
-            _.map(orders, o => taker),
-            {},
-            decodedTx.blockNumber,
-        );
-        const output = {
-            accounts: {
-                ...accounts,
-                taker: decodedTx.txReceipt.from,
-            },
-            tokens,
-            orders,
-            orderAndTraderInfo,
-            logs: decodedTx.decodedLogs,
-            revertReason: decodedTx.revertReason,
-            tx: txHash,
-        };
-        console.log(JSON.stringify(_.pickBy(output, _.identity), null, 2));
     }
 }

@@ -20,7 +20,9 @@ export class OrderHash extends Command {
         'network-id': defaultFlags.networkId(),
     };
 
-    public async run() {
+    // tslint:disable-next-line:async-suffix
+    public async run(): Promise<void> {
+        // tslint:disable-next-line:no-shadowed-variable
         const { flags } = this.parse(OrderHash);
         const provider = utils.getProvider(flags);
         const networkId = utils.getNetworkId(flags);

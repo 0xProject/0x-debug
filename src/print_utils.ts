@@ -1,12 +1,14 @@
-// import { BigNumber, ContractWrappers, Order, OrderInfo, OrderStatus, SignedOrder } from '0x.js';
-import { ContractWrappers, OrderInfo, OrderStatus, SignedOrder } from '@0x/contract-wrappers';
+// tslint:disable:forin
+import { ContractWrappers, Order, OrderInfo, OrderStatus, SignedOrder } from '@0x/contract-wrappers';
 import { BigNumber } from '@0x/utils';
 import { Web3Wrapper } from '@0x/web3-wrapper';
 import {
     BlockParam,
     BlockParamLiteral,
     DecodedLogArgs,
+    LogEntry,
     LogWithDecodedArgs,
+    TransactionReceiptStatus,
     TransactionReceiptWithDecodedLogs,
 } from 'ethereum-types';
 import * as _ from 'lodash';
@@ -27,18 +29,6 @@ interface Table {
 }
 const EMPTY_DATA: TableData = [];
 const DEFAULT_EVENTS = ['Fill', 'Transfer', 'CancelUpTo', 'Cancel'];
-
-const erc721IconRaw = [
-    '    ____  ',
-    '  .X +.    .',
-    '.Xx + -.     .',
-    'XXx++ -..      ',
-    'XXxx++--..    ',
-    ` XXXxx+++--  `,
-    "  XXXxxx'     ",
-    '     ""     ',
-];
-const erc721Icon = erc721IconRaw.join('\n');
 
 const defaultSchema = {
     style: {
@@ -217,32 +207,35 @@ export class PrintUtils {
             throw e;
         }
     }
+    // tslint:disable-next-line:prefer-function-over-method
     public printTransaction(
         header: string,
-        txReceipt: TransactionReceiptWithDecodedLogs,
+        txHash: string,
+        txStatus: TransactionReceiptStatus,
+        gasUsed: number,
+        decodedLogs: LogEntry[] | Array<LogWithDecodedArgs<{}>> | undefined,
         data: string[][] = [],
         eventNames: string[] = DEFAULT_EVENTS,
     ): void {
         PrintUtils.printHeader('Transaction');
-        const headerColor = txReceipt.status === 1 ? 'green' : 'red';
+        const headerColor = txStatus === 1 ? 'green' : 'red';
         const table = new Table({
             ...defaultSchema,
-            head: [header, txReceipt.transactionHash],
+            head: [header, txHash],
             style: { ...defaultSchema.style, head: [headerColor] },
         });
-        const status = txReceipt.status === 1 ? 'Success' : 'Failure';
-        const tableData = [...data, ['gasUsed', txReceipt.gasUsed.toString()], ['status', status]];
+        const status = txStatus === 1 ? 'Success' : 'Failure';
+        const tableData = [...data, ['gasUsed', gasUsed.toString()], ['status', status]];
         PrintUtils.pushAndPrint(table, tableData);
 
-        if (txReceipt.logs.length > 0) {
+        if (decodedLogs && decodedLogs.length > 0) {
             PrintUtils.printHeader('Logs');
-            for (const log of txReceipt.logs) {
-                const decodedLog = this._web3Wrapper.abiDecoder.tryToDecodeLogOrNoop(log);
+            for (const log of decodedLogs) {
                 // tslint:disable:no-unnecessary-type-assertion
-                const eventName = (decodedLog as LogWithDecodedArgs<DecodedLogArgs>).event;
+                const eventName = (log as LogWithDecodedArgs<DecodedLogArgs>).event;
                 if (eventName && eventNames.includes(eventName)) {
                     // tslint:disable:no-unnecessary-type-assertion
-                    const args = (decodedLog as LogWithDecodedArgs<DecodedLogArgs>).args;
+                    const args = (log as LogWithDecodedArgs<DecodedLogArgs>).args;
                     const logData = [['contract', log.address], ...Object.entries(args)];
                     PrintUtils.printData(`${eventName}`, logData as any);
                 }
@@ -258,26 +251,5 @@ export class PrintUtils {
     // tslint:disable-next-line:prefer-function-over-method
     public printOrder(order: Order | SignedOrder): void {
         PrintUtils.printData('Order', Object.entries(order));
-    }
-    public async fetchAndPrintERC721OwnerAsync(erc721TokenAddress: string, tokenId: BigNumber): Promise<void> {
-        const flattenedBalances = [];
-        const flattenedAccounts = Object.keys(this._accounts).map(
-            account => account.charAt(0).toUpperCase() + account.slice(1),
-        );
-        const tokenSymbol = 'ERC721';
-        const balances = [tokenSymbol];
-        const owner = await this._contractWrappers.erc721Token.getOwnerOfAsync(erc721TokenAddress, tokenId);
-        for (const account in this._accounts) {
-            const address = this._accounts[account];
-            const balance = owner === address ? erc721Icon : '';
-            balances.push(balance);
-        }
-        flattenedBalances.push(balances);
-        const table = new Table({
-            ...dataSchema,
-            head: ['Token', ...flattenedAccounts],
-        });
-        PrintUtils.printHeader('ERC721 Owner');
-        PrintUtils.pushAndPrint(table, flattenedBalances);
     }
 }

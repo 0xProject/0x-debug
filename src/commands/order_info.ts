@@ -26,7 +26,9 @@ export class OrderInfoCommand extends Command {
     private _web3Wrapper!: Web3Wrapper;
     private _contractWrappers!: ContractWrappers;
 
-    public async run() {
+    // tslint:disable-next-line:async-suffix
+    public async run(): Promise<void> {
+        // tslint:disable-next-line:no-shadowed-variable
         const { flags } = this.parse(OrderInfoCommand);
         const provider = utils.getProvider(flags);
         const networkId = utils.getNetworkId(flags);

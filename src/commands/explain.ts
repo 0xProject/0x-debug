@@ -1,6 +1,8 @@
 import { Command, flags } from '@oclif/command';
 
 import { defaultFlags, renderFlags } from '../global_flags';
+import { explainTransactionPrinter } from '../printers/explain_transaction_printer';
+import { jsonPrinter } from '../printers/json_printer';
 import { TxExplainer } from '../tx_explainer';
 import { utils } from '../utils';
 
@@ -17,15 +19,18 @@ export class Explain extends Command {
 
     public static args = [{ name: 'tx' }];
 
-    public async run() {
+    // tslint:disable-next-line:async-suffix
+    public async run(): Promise<void> {
+        // tslint:disable-next-line:no-shadowed-variable
         const { args, flags } = this.parse(Explain);
         const provider = utils.getProvider(flags);
         const networkId = utils.getNetworkId(flags);
-        provider.start();
+        (provider as any)._ready.go();
         const explainer = new TxExplainer(provider, networkId);
+        const output = await explainer.explainTransactionAsync(args.tx);
         flags.json
-            ? await explainer.explainTransactionJSONAsync(args.tx)
-            : await explainer.explainTransactionAsync(args.tx);
+            ? await jsonPrinter.printConsole(output)
+            : await explainTransactionPrinter.printConsole(output, provider, networkId);
         provider.stop();
     }
 }

@@ -76,7 +76,9 @@ export class AbiDecode extends Command {
     public static args = [{ name: 'abiEncodedData' }];
     public static strict = false;
 
-    public async run() {
+    // tslint:disable-next-line:async-suffix
+    public async run(): Promise<void> {
+        // tslint:disable-next-line:no-shadowed-variable
         const { flags, argv } = this.parse(AbiDecode);
         const provider = utils.getProvider(flags);
         const networkId = utils.getNetworkId(flags);

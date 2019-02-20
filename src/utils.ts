@@ -1,10 +1,10 @@
 import { assetDataUtils } from '@0x/order-utils';
 import { ERC20AssetData, Order, SignedOrder } from '@0x/types';
 import _ = require('lodash');
-// import { RPCSubprovider, Web3ProviderEngine } from '@0x/subproviders';
-// tslint:disable-next-line:no-implicit-dependencies
+// tslint:disable:no-implicit-dependencies no-var-requires
 const Web3ProviderEngine = require('web3-provider-engine');
 const RpcSubprovider = require('web3-provider-engine/subproviders/rpc.js');
+
 enum Networks {
     Mainnet = 1,
     Goerli = 5,
@@ -60,7 +60,9 @@ export const utils = {
         }
         return orders;
     },
-    extractAccountsAndTokens(orders: Order[]) {
+    extractAccountsAndTokens(
+        orders: Order[],
+    ): { accounts: { [key: string]: string }; tokens: { [key: string]: string } } {
         let accounts = { taker: '' };
         let tokens = {};
         _.forEach(orders, (order, index) => {
@@ -74,13 +76,13 @@ export const utils = {
             tokens,
         };
     },
-    extractMakerTaker(order: Order, position: string = '') {
+    extractMakerTaker(order: Order, position: string = ''): { [key: string]: string } {
         const accounts = {
             [`maker${position}`]: order.makerAddress,
         };
         return accounts;
     },
-    extractTokens(order: Order, position: string = '') {
+    extractTokens(order: Order, position: string = ''): { [key: string]: string } {
         const makerAssetData = assetDataUtils.decodeAssetDataOrThrow(order.makerAssetData) as ERC20AssetData;
         const takerAssetData = assetDataUtils.decodeAssetDataOrThrow(order.takerAssetData) as ERC20AssetData;
         const tokens = {
