@@ -1,15 +1,10 @@
-import { BalanceAndAllowance, ContractWrappers, OrderInfo } from '@0x/contract-wrappers';
-import { Web3Wrapper } from '@0x/web3-wrapper';
+import { ContractWrappers } from '@0x/contract-wrappers';
 import { Command, flags } from '@oclif/command';
 
 import { defaultFlags, renderFlags } from '../global_flags';
-import { PrintUtils } from '../print_utils';
+import { jsonPrinter } from '../printers/json_printer';
+import { orderInfoPrinter } from '../printers/order_info_printer';
 import { utils } from '../utils';
-
-interface Output {
-    orderInfo: OrderInfo;
-    balanceAndAllowance?: BalanceAndAllowance;
-}
 
 export class OrderInfoCommand extends Command {
     public static description = 'Order Info for the provided order';
@@ -23,8 +18,6 @@ export class OrderInfoCommand extends Command {
         'network-id': defaultFlags.networkId(),
         json: renderFlags.json,
     };
-    private _web3Wrapper!: Web3Wrapper;
-    private _contractWrappers!: ContractWrappers;
 
     // tslint:disable-next-line:async-suffix
     public async run(): Promise<void> {
@@ -32,14 +25,12 @@ export class OrderInfoCommand extends Command {
         const { flags } = this.parse(OrderInfoCommand);
         const provider = utils.getProvider(flags);
         const networkId = utils.getNetworkId(flags);
-        provider.start();
-        this._web3Wrapper = new Web3Wrapper(provider);
         const order = JSON.parse(flags.order);
-        this._contractWrappers = new ContractWrappers(provider, { networkId });
-        const orderInfo = await this._contractWrappers.exchange.getOrderInfoAsync(order);
+        const contractWrappers = new ContractWrappers(provider, { networkId });
+        const orderInfo = await contractWrappers.exchange.getOrderInfoAsync(order);
         let balanceAndAllowance;
         if (flags.balances) {
-            balanceAndAllowance = await this._contractWrappers.orderValidator.getBalanceAndAllowanceAsync(
+            balanceAndAllowance = await contractWrappers.orderValidator.getBalanceAndAllowanceAsync(
                 order.makerAddress,
                 order.makerAssetData,
             );
@@ -48,21 +39,7 @@ export class OrderInfoCommand extends Command {
             orderInfo,
             balanceAndAllowance,
         };
-        flags.json ? this._renderJSON(output) : this._renderConsole(output);
+        flags.json ? jsonPrinter.printConsole(output) : orderInfoPrinter.printConsole(output);
         provider.stop();
-    }
-    private _renderConsole(output: Output): void {
-        const printUtils = new PrintUtils(this._web3Wrapper, this._contractWrappers, {}, {});
-        PrintUtils.printData('Orderhash', [[output.orderInfo.orderHash]]);
-        PrintUtils.printData('Remaining', [[output.orderInfo.orderTakerAssetFilledAmount]]);
-        printUtils.printOrderInfos({ order: output.orderInfo });
-        if (output.balanceAndAllowance) {
-            PrintUtils.printData('Balance', [[output.balanceAndAllowance.balance.toString()]]);
-            PrintUtils.printData('Allowance', [[output.balanceAndAllowance.allowance.toString()]]);
-        }
-    }
-    // tslint:disable-next-line:prefer-function-over-method
-    private _renderJSON(output: Output): void {
-        console.log(JSON.stringify(output, null, 2));
     }
 }

@@ -3,8 +3,9 @@ import { Web3Wrapper } from '@0x/web3-wrapper';
 import { Provider } from 'ethereum-protocol';
 import _ = require('lodash');
 
-import { PrintUtils } from '../print_utils';
 import { ExplainedTransactionOutput } from '../types';
+
+import { PrintUtils } from './print_utils';
 
 export const explainTransactionPrinter = {
     printConsole(output: ExplainedTransactionOutput, provider: Provider, networkId: number): void {
@@ -14,7 +15,7 @@ export const explainTransactionPrinter = {
         const printUtils = new PrintUtils(web3Wrapper, contractWrappers, output.accounts, output.tokens);
         const additionalInfo = output.revertReason ? [['Reason', output.revertReason]] : [];
         printUtils.printAccounts();
-        printUtils.printTransaction(
+        PrintUtils.printTransaction(
             output.functionName,
             output.tx,
             output.txStatus,
@@ -22,6 +23,6 @@ export const explainTransactionPrinter = {
             output.logs,
             additionalInfo,
         );
-        _.forEach(output.orders, order => printUtils.printOrder(order));
+        _.forEach(output.orders, order => PrintUtils.printOrder(order));
     },
 };

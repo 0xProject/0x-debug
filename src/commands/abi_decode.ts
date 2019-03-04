@@ -1,9 +1,12 @@
 import { AssetProxyOwner, ERC20Proxy, Exchange, Forwarder } from '@0x/contract-artifacts';
 import { ContractWrappers } from '@0x/contract-wrappers';
+import { DecodedCalldata, Web3Wrapper } from '@0x/web3-wrapper';
 import { Command, flags } from '@oclif/command';
 
-import { defaultFlags } from '../global_flags';
-import { PrintUtils } from '../print_utils';
+import { defaultFlags, renderFlags } from '../global_flags';
+import { abiDecodePrinter } from '../printers/abi_decode_printer';
+import { jsonPrinter } from '../printers/json_printer';
+import { txExplainerUtils } from '../tx_explainer';
 import { utils } from '../utils';
 
 const revertWithReasonABI = {
@@ -72,6 +75,8 @@ export class AbiDecode extends Command {
     public static flags = {
         help: flags.help({ char: 'h' }),
         'network-id': defaultFlags.networkId(),
+        tx: flags.boolean({ required: false }),
+        json: renderFlags.json,
     };
     public static args = [{ name: 'abiEncodedData' }];
     public static strict = false;
@@ -82,7 +87,6 @@ export class AbiDecode extends Command {
         const { flags, argv } = this.parse(AbiDecode);
         const provider = utils.getProvider(flags);
         const networkId = utils.getNetworkId(flags);
-        provider.start();
         const contractWrappers = new ContractWrappers(provider, { networkId });
         const abiDecoder = contractWrappers.getAbiDecoder();
         abiDecoder.addABI((Exchange as any).compilerOutput.abi, 'Exchange');
@@ -92,12 +96,22 @@ export class AbiDecode extends Command {
         abiDecoder.addABI([erc20TokenAbi], 'ERC20Token');
         abiDecoder.addABI([erc721TokenAbi], 'ERC721Token');
         abiDecoder.addABI([revertWithReasonABI], 'Revert');
-        for (const arg of argv) {
-            const decodedCallData = abiDecoder.decodeCalldataOrThrow(arg);
-            PrintUtils.printHeader(decodedCallData.functionName);
-            PrintUtils.printData(decodedCallData.functionSignature, Object.entries(decodedCallData.functionArguments));
+        const outputs: DecodedCalldata[] = [];
+        if (flags.tx) {
+            const web3Wrapper = new Web3Wrapper(provider);
+            for (const arg of argv) {
+                const explainedTx = await txExplainerUtils.explainTransactionAsync(web3Wrapper, arg, abiDecoder);
+                outputs.push(explainedTx.decodedInput);
+            }
+        } else {
+            for (const arg of argv) {
+                const decodedCallData = abiDecoder.decodeCalldataOrThrow(arg);
+                outputs.push(decodedCallData);
+            }
         }
-
+        for (const output of outputs) {
+            flags.json ? jsonPrinter.printConsole(output) : abiDecodePrinter.printConsole(output);
+        }
         provider.stop();
     }
 }

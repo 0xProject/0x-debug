@@ -1,3 +1,4 @@
+import { ContractWrappers } from '@0x/contract-wrappers';
 import { assetDataUtils } from '@0x/order-utils';
 import { ERC20AssetData, Order, SignedOrder } from '@0x/types';
 import _ = require('lodash');
@@ -34,7 +35,7 @@ export const utils = {
         const rpcSubprovider = new RpcSubprovider({ rpcUrl: utils.getNetworkRPCOrThrow(networkId) });
         const provider = new Web3ProviderEngine();
         provider.addProvider(rpcSubprovider);
-        provider.start();
+        (provider as any)._ready.go();
         return provider;
     },
     getNetworkRPCOrThrow(networkId: Networks): string {
@@ -44,20 +45,37 @@ export const utils = {
         }
         return url;
     },
-    extractOrders(inputArguments: any): Order[] | SignedOrder[] {
+    extractOrders(inputArguments: any, to: string, contractWrappers: ContractWrappers): Order[] | SignedOrder[] {
         let orders: Order[] = [];
         if (inputArguments.order) {
             orders.push(inputArguments.order);
         } else if (inputArguments.orders) {
-            console.log('got many orders');
             orders = inputArguments.orders;
+
             if (inputArguments.signatures) {
-                console.log('got signatures');
                 _.forEach(orders, (order, index) => {
                     (order as SignedOrder).signature = inputArguments.signatures[index];
                 });
             }
         }
+        // Normalize orders
+        const firstOrder = orders[0];
+        // Order call data can be optimised as it is assumed they are
+        // all the same asset data in some scenarios
+        _.forEach(orders, order => {
+            if (order.makerAssetData === '0x') {
+                order.makerAssetData = firstOrder.makerAssetData;
+            }
+            if (order.takerAssetData === '0x') {
+                order.takerAssetData = firstOrder.takerAssetData;
+            }
+            // Forwarder assumes the taker asset is WETH
+            if (order.takerAssetData === '0x' && to === contractWrappers.forwarder.address) {
+                order.takerAssetData = assetDataUtils.encodeERC20AssetData(
+                    contractWrappers.forwarder.etherTokenAddress,
+                );
+            }
+        });
         return orders;
     },
     extractAccountsAndTokens(

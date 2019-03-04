@@ -1,6 +1,8 @@
 // Decodes any 0x transaction
 import { OrderValidatorContract } from '@0x/abi-gen-wrappers';
-import { ContractWrappers, OrderAndTraderInfo } from '@0x/contract-wrappers';
+import { AssetProxyOwner, Forwarder } from '@0x/contract-artifacts';
+import { ContractWrappers } from '@0x/contract-wrappers';
+import { assetDataUtils } from '@0x/order-utils';
 import { Order, SignedOrder } from '@0x/types';
 import { AbiDecoder, BigNumber, DecodedCalldata } from '@0x/utils';
 import { Web3Wrapper } from '@0x/web3-wrapper';
@@ -15,7 +17,6 @@ import {
 } from 'ethereum-types';
 import * as _ from 'lodash';
 
-import { PrintUtils } from './print_utils';
 import { ExplainedTransactionOutput } from './types';
 import { utils } from './utils';
 
@@ -154,10 +155,14 @@ export class TxExplainer {
     constructor(provider: Provider, networkId: number) {
         this._contractWrappers = new ContractWrappers(provider, { networkId });
         const web3Wrapper = new Web3Wrapper(provider);
-        this._contractWrappers.getAbiDecoder().addABI([revertWithReasonABI], 'Revert');
+        const abiDecoder = this._contractWrappers.getAbiDecoder();
         web3Wrapper.abiDecoder.addABI(this._contractWrappers.exchange.abi);
         web3Wrapper.abiDecoder.addABI(this._contractWrappers.erc20Token.abi);
         web3Wrapper.abiDecoder.addABI(this._contractWrappers.erc721Token.abi);
+        abiDecoder.addABI([revertWithReasonABI], 'Revert');
+        abiDecoder.addABI((Forwarder as any).compilerOutput.abi, 'Forwarder');
+        abiDecoder.addABI((AssetProxyOwner as any).compilerOutput.abi, 'AssetProxyOwner');
+        web3Wrapper.abiDecoder.addABI((AssetProxyOwner as any).compilerOutput.abi);
         this._web3Wrapper = web3Wrapper;
     }
 
@@ -171,7 +176,7 @@ export class TxExplainer {
             this._contractWrappers.getAbiDecoder(),
         );
         const inputArguments = decodedTx.decodedInput.functionArguments;
-        const orders: Order[] = utils.extractOrders(inputArguments);
+        const orders: Order[] = utils.extractOrders(inputArguments, decodedTx.txReceipt.to, this._contractWrappers);
         const { accounts, tokens } = utils.extractAccountsAndTokens(orders);
         const taker = decodedTx.txReceipt.from;
         const contract: OrderValidatorContract = await (this._contractWrappers

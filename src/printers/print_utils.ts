@@ -102,6 +102,48 @@ export class PrintUtils {
         }
         console.log(table.toString());
     }
+    public static printOrderInfos(orderInfos: { [orderName: string]: OrderInfo }): void {
+        const data: string[][] = [];
+        _.forOwn(orderInfos, (value, key) => data.push([key, OrderStatus[value.orderStatus], value.orderHash]));
+        PrintUtils.printData('Order Info', data);
+    }
+    public static printOrder(order: Order | SignedOrder): void {
+        PrintUtils.printData('Order', Object.entries(order));
+    }
+    public static printTransaction(
+        header: string,
+        txHash: string,
+        txStatus: TransactionReceiptStatus,
+        gasUsed: number,
+        decodedLogs: LogEntry[] | Array<LogWithDecodedArgs<{}>> | undefined,
+        data: string[][] = [],
+        eventNames: string[] = DEFAULT_EVENTS,
+    ): void {
+        PrintUtils.printHeader('Transaction');
+        const headerColor = txStatus === 1 ? 'green' : 'red';
+        const table = new Table({
+            ...defaultSchema,
+            head: [header, txHash],
+            style: { ...defaultSchema.style, head: [headerColor] },
+        });
+        const status = txStatus === 1 ? 'Success' : 'Failure';
+        const tableData = [...data, ['gasUsed', gasUsed.toString()], ['status', status]];
+        PrintUtils.pushAndPrint(table, tableData);
+
+        if (decodedLogs && decodedLogs.length > 0) {
+            PrintUtils.printHeader('Logs');
+            for (const log of decodedLogs) {
+                // tslint:disable:no-unnecessary-type-assertion
+                const eventName = (log as LogWithDecodedArgs<DecodedLogArgs>).event;
+                if (eventName && eventNames.includes(eventName)) {
+                    // tslint:disable:no-unnecessary-type-assertion
+                    const args = (log as LogWithDecodedArgs<DecodedLogArgs>).args;
+                    const logData = [['contract', log.address], ...Object.entries(args)];
+                    PrintUtils.printData(`${eventName}`, logData as any);
+                }
+            }
+        }
+    }
     constructor(
         web3Wrapper: Web3Wrapper,
         contractWrappers: ContractWrappers,
@@ -206,50 +248,5 @@ export class PrintUtils {
             spinner.fail(message);
             throw e;
         }
-    }
-    // tslint:disable-next-line:prefer-function-over-method
-    public printTransaction(
-        header: string,
-        txHash: string,
-        txStatus: TransactionReceiptStatus,
-        gasUsed: number,
-        decodedLogs: LogEntry[] | Array<LogWithDecodedArgs<{}>> | undefined,
-        data: string[][] = [],
-        eventNames: string[] = DEFAULT_EVENTS,
-    ): void {
-        PrintUtils.printHeader('Transaction');
-        const headerColor = txStatus === 1 ? 'green' : 'red';
-        const table = new Table({
-            ...defaultSchema,
-            head: [header, txHash],
-            style: { ...defaultSchema.style, head: [headerColor] },
-        });
-        const status = txStatus === 1 ? 'Success' : 'Failure';
-        const tableData = [...data, ['gasUsed', gasUsed.toString()], ['status', status]];
-        PrintUtils.pushAndPrint(table, tableData);
-
-        if (decodedLogs && decodedLogs.length > 0) {
-            PrintUtils.printHeader('Logs');
-            for (const log of decodedLogs) {
-                // tslint:disable:no-unnecessary-type-assertion
-                const eventName = (log as LogWithDecodedArgs<DecodedLogArgs>).event;
-                if (eventName && eventNames.includes(eventName)) {
-                    // tslint:disable:no-unnecessary-type-assertion
-                    const args = (log as LogWithDecodedArgs<DecodedLogArgs>).args;
-                    const logData = [['contract', log.address], ...Object.entries(args)];
-                    PrintUtils.printData(`${eventName}`, logData as any);
-                }
-            }
-        }
-    }
-    // tslint:disable-next-line:prefer-function-over-method
-    public printOrderInfos(orderInfos: { [orderName: string]: OrderInfo }): void {
-        const data: string[][] = [];
-        _.forOwn(orderInfos, (value, key) => data.push([key, OrderStatus[value.orderStatus]]));
-        PrintUtils.printData('Order Info', data);
-    }
-    // tslint:disable-next-line:prefer-function-over-method
-    public printOrder(order: Order | SignedOrder): void {
-        PrintUtils.printData('Order', Object.entries(order));
     }
 }
