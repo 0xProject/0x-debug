@@ -33,6 +33,7 @@ export interface ExplainedTransactionOutput {
     revertReason?: string;
     logs?: Array<LogWithDecodedArgs<DecodedLogArgs>>;
     functionName: string;
+    callData?: string;
 }
 
 export interface OrderInfoOutput {

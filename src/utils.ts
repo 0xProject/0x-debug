@@ -1,6 +1,8 @@
+import { AssetProxyOwner, Forwarder } from '@0x/contract-artifacts';
 import { ContractWrappers } from '@0x/contract-wrappers';
 import { assetDataUtils } from '@0x/order-utils';
 import { ERC20AssetData, Order, SignedOrder } from '@0x/types';
+import { MethodAbi, Web3Wrapper } from '@0x/web3-wrapper';
 import _ = require('lodash');
 // tslint:disable:no-implicit-dependencies no-var-requires
 const Web3ProviderEngine = require('web3-provider-engine');
@@ -8,6 +10,7 @@ const RpcSubprovider = require('web3-provider-engine/subproviders/rpc.js');
 
 enum Networks {
     Mainnet = 1,
+    Rinkeby = 4,
     Goerli = 5,
     Ropsten = 3,
     Kovan = 42,
@@ -18,11 +21,44 @@ const NETWORK_ID_TO_RPC_URL: { [key in Networks]: string } = {
     [Networks.Kovan]: 'https://kovan.infura.io',
     [Networks.Mainnet]: 'https://mainnet.infura.io',
     [Networks.Ropsten]: 'https://ropsten.infura.io',
+    [Networks.Rinkeby]: 'https://rinkeby.infura.io',
     [Networks.Goerli]: 'http://localhost:8545',
     [Networks.Ganache]: 'http://localhost:8545',
 };
 
+const revertWithReasonABI: MethodAbi = {
+    constant: true,
+    inputs: [
+        {
+            name: 'error',
+            type: 'string',
+        },
+    ],
+    name: 'Error',
+    outputs: [
+        {
+            name: 'error',
+            type: 'string',
+        },
+    ],
+    payable: false,
+    stateMutability: 'view',
+    type: 'function',
+};
+
 export const utils = {
+    loadABIs(web3Wrapper: Web3Wrapper, contractWrappers: ContractWrappers): void {
+        const abiDecoder = contractWrappers.getAbiDecoder();
+        web3Wrapper.abiDecoder.addABI(contractWrappers.exchange.abi);
+        web3Wrapper.abiDecoder.addABI(contractWrappers.erc20Token.abi);
+        web3Wrapper.abiDecoder.addABI(contractWrappers.erc721Token.abi);
+        abiDecoder.addABI([revertWithReasonABI], 'Revert');
+        web3Wrapper.abiDecoder.addABI([revertWithReasonABI], 'Revert');
+        abiDecoder.addABI((AssetProxyOwner as any).compilerOutput.abi, 'AssetProxyOwner');
+        web3Wrapper.abiDecoder.addABI((AssetProxyOwner as any).compilerOutput.abi);
+        abiDecoder.addABI((Forwarder as any).compilerOutput.abi, 'Forwarder');
+        web3Wrapper.abiDecoder.addABI(contractWrappers.forwarder.abi);
+    },
     getNetworkId(flags: any): number {
         const networkId = flags['network-id'];
         if (!networkId) {
@@ -40,7 +76,7 @@ export const utils = {
     },
     getNetworkRPCOrThrow(networkId: Networks): string {
         const url = NETWORK_ID_TO_RPC_URL[networkId];
-        if (_.isUndefined(url)) {
+        if (url === undefined) {
             throw new Error('UNSUPPORTED_NETWORK');
         }
         return url;

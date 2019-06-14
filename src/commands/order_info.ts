@@ -1,4 +1,4 @@
-import { ContractWrappers } from '@0x/contract-wrappers';
+import { BlockParamLiteral, ContractWrappers, Order } from '@0x/contract-wrappers';
 import { Command, flags } from '@oclif/command';
 
 import { defaultFlags, renderFlags } from '../global_flags';
@@ -15,6 +15,7 @@ export class OrderInfoCommand extends Command {
         help: flags.help({ char: 'h' }),
         order: flags.string({ char: 'o', description: 'The order in JSON format', required: true }),
         balances: flags.boolean({ description: 'Fetch the balances and allowances for the maker address' }),
+        blockNumber: flags.integer({ description: 'The block number to fetch at' }),
         'network-id': defaultFlags.networkId(),
         json: renderFlags.json,
     };
@@ -25,9 +26,18 @@ export class OrderInfoCommand extends Command {
         const { flags } = this.parse(OrderInfoCommand);
         const provider = utils.getProvider(flags);
         const networkId = utils.getNetworkId(flags);
-        const order = JSON.parse(flags.order);
+        const rawOrder: Order = JSON.parse(flags.order);
         const contractWrappers = new ContractWrappers(provider, { networkId });
-        const orderInfo = await contractWrappers.exchange.getOrderInfoAsync(order);
+        let order = rawOrder;
+        if (!rawOrder.exchangeAddress) {
+            order = {
+                ...rawOrder,
+                exchangeAddress: contractWrappers.exchange.address,
+            };
+        }
+        const orderInfo = await contractWrappers.exchange.getOrderInfoAsync(order, {
+            defaultBlock: flags.blockNumber || BlockParamLiteral.Latest,
+        });
         let balanceAndAllowance;
         if (flags.balances) {
             balanceAndAllowance = await contractWrappers.orderValidator.getBalanceAndAllowanceAsync(

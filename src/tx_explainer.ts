@@ -2,7 +2,6 @@
 import { OrderValidatorContract } from '@0x/abi-gen-wrappers';
 import { AssetProxyOwner, Forwarder } from '@0x/contract-artifacts';
 import { ContractWrappers } from '@0x/contract-wrappers';
-import { assetDataUtils } from '@0x/order-utils';
 import { Order, SignedOrder } from '@0x/types';
 import { AbiDecoder, BigNumber, DecodedCalldata } from '@0x/utils';
 import { Web3Wrapper } from '@0x/web3-wrapper';
@@ -32,6 +31,7 @@ interface ExplainedTransaction {
     value?: BigNumber;
     txReceipt: TransactionReceipt;
     blockNumber: number;
+    callData?: string;
 }
 export const txExplainerUtils = {
     async explainTransactionAsync(
@@ -87,6 +87,7 @@ export const txExplainerUtils = {
             decodedLogs,
             revertReason,
             txReceipt,
+            callData: tx.input,
         };
     },
     async decodeRevertReasonAsync(
@@ -106,7 +107,7 @@ export const txExplainerUtils = {
                 result = `0x${resultRaw}`;
             }
         }
-        if (!_.isUndefined(result)) {
+        if (result !== undefined) {
             const decodedRevertReason = abiDecoder.decodeCalldataOrThrow(result);
             if (decodedRevertReason.functionArguments.error) {
                 return decodedRevertReason.functionArguments.error;
@@ -154,20 +155,12 @@ export class TxExplainer {
     private _contractWrappers: ContractWrappers;
     constructor(provider: Provider, networkId: number) {
         this._contractWrappers = new ContractWrappers(provider, { networkId });
-        const web3Wrapper = new Web3Wrapper(provider);
-        const abiDecoder = this._contractWrappers.getAbiDecoder();
-        web3Wrapper.abiDecoder.addABI(this._contractWrappers.exchange.abi);
-        web3Wrapper.abiDecoder.addABI(this._contractWrappers.erc20Token.abi);
-        web3Wrapper.abiDecoder.addABI(this._contractWrappers.erc721Token.abi);
-        abiDecoder.addABI([revertWithReasonABI], 'Revert');
-        abiDecoder.addABI((Forwarder as any).compilerOutput.abi, 'Forwarder');
-        abiDecoder.addABI((AssetProxyOwner as any).compilerOutput.abi, 'AssetProxyOwner');
-        web3Wrapper.abiDecoder.addABI((AssetProxyOwner as any).compilerOutput.abi);
-        this._web3Wrapper = web3Wrapper;
+        this._web3Wrapper = new Web3Wrapper(provider);
+        utils.loadABIs(this._web3Wrapper, this._contractWrappers);
     }
 
     public async explainTransactionAsync(txHash: string): Promise<ExplainedTransactionOutput> {
-        if (_.isUndefined(txHash)) {
+        if (txHash === undefined) {
             throw new Error('txHash must be defined');
         }
         const decodedTx = await txExplainerUtils.explainTransactionAsync(
@@ -211,6 +204,7 @@ export class TxExplainer {
             txStatus: decodedTx.txReceipt.status,
             gasUsed: decodedTx.txReceipt.gasUsed,
             blockNumber: decodedTx.txReceipt.blockNumber,
+            callData: decodedTx.callData,
         };
         return output;
     }
