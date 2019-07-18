@@ -18,7 +18,7 @@ $ npm install -g 0x-debug
 $ 0x-debug COMMAND
 running command...
 $ 0x-debug (-v|--version|version)
-0x-debug/0.0.2 darwin-x64 node-v11.13.0
+0x-debug/0.0.3 darwin-x64 node-v11.13.0
 $ 0x-debug --help [COMMAND]
 USAGE
   $ 0x-debug COMMAND
@@ -54,7 +54,7 @@ EXAMPLE
   $ 0x-debug abidecode [abi encoded data]
 ```
 
-_See code: [src/commands/abi_decode.ts](https://github.com/dekz/0x-debug/blob/v0.0.2/src/commands/abi_decode.ts)_
+_See code: [src/commands/abi_decode.ts](https://github.com/dekz/0x-debug/blob/v0.0.3/src/commands/abi_decode.ts)_
 
 ## `0x-debug call [ADDRESS] [CALLDATA]`
 
@@ -77,7 +77,7 @@ EXAMPLE
   $ 0x-debug call [address] [callData]
 ```
 
-_See code: [src/commands/call.ts](https://github.com/dekz/0x-debug/blob/v0.0.2/src/commands/call.ts)_
+_See code: [src/commands/call.ts](https://github.com/dekz/0x-debug/blob/v0.0.3/src/commands/call.ts)_
 
 ## `0x-debug explain [TX]`
 
@@ -96,7 +96,7 @@ EXAMPLE
   $ 0x-debug explain [tx]
 ```
 
-_See code: [src/commands/explain.ts](https://github.com/dekz/0x-debug/blob/v0.0.2/src/commands/explain.ts)_
+_See code: [src/commands/explain.ts](https://github.com/dekz/0x-debug/blob/v0.0.3/src/commands/explain.ts)_
 
 ## `0x-debug help [COMMAND]`
 
@@ -113,7 +113,7 @@ OPTIONS
   --all  see all commands in CLI
 ```
 
-_See code: [@oclif/plugin-help](https://github.com/oclif/plugin-help/blob/v2.1.6/src/commands/help.ts)_
+_See code: [@oclif/plugin-help](https://github.com/oclif/plugin-help/blob/v2.2.0/src/commands/help.ts)_
 
 ## `0x-debug order_hash`
 
@@ -134,7 +134,7 @@ EXAMPLE
   $ 0x-debug orderhash --order [JSON_ORDER]
 ```
 
-_See code: [src/commands/order_hash.ts](https://github.com/dekz/0x-debug/blob/v0.0.2/src/commands/order_hash.ts)_
+_See code: [src/commands/order_hash.ts](https://github.com/dekz/0x-debug/blob/v0.0.3/src/commands/order_hash.ts)_
 
 ## `0x-debug order_info`
 
@@ -156,5 +156,5 @@ EXAMPLE
   $ 0x-debug order-info --order-hash [ORDER_HASH]
 ```
 
-_See code: [src/commands/order_info.ts](https://github.com/dekz/0x-debug/blob/v0.0.2/src/commands/order_info.ts)_
+_See code: [src/commands/order_info.ts](https://github.com/dekz/0x-debug/blob/v0.0.3/src/commands/order_info.ts)_
 <!-- commandsstop -->
