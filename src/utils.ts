@@ -18,10 +18,10 @@ enum Networks {
 }
 
 const NETWORK_ID_TO_RPC_URL: { [key in Networks]: string } = {
-    [Networks.Kovan]: 'https://kovan.infura.io',
-    [Networks.Mainnet]: 'https://mainnet.infura.io',
-    [Networks.Ropsten]: 'https://ropsten.infura.io',
-    [Networks.Rinkeby]: 'https://rinkeby.infura.io',
+    [Networks.Kovan]: 'https://kovan.infura.io/v3/d88014795f184ec4acc54d90bbf06dac',
+    [Networks.Mainnet]: 'https://mainnet.infura.io/v3/d88014795f184ec4acc54d90bbf06dac',
+    [Networks.Ropsten]: 'https://ropsten.infura.io/v3/d88014795f184ec4acc54d90bbf06dac',
+    [Networks.Rinkeby]: 'https://rinkeby.infura.io/v3/d88014795f184ec4acc54d90bbf06dac',
     [Networks.Goerli]: 'http://localhost:8545',
     [Networks.Ganache]: 'http://localhost:8545',
 };

@@ -1,6 +1,6 @@
 import { ContractWrappers } from '@0x/contract-wrappers';
 import { Web3Wrapper } from '@0x/web3-wrapper';
-import { Provider } from 'ethereum-protocol';
+import { Provider } from 'ethereum-types';
 import _ = require('lodash');
 
 import { ExplainedTransactionOutput } from '../types';
