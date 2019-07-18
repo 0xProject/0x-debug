@@ -7,8 +7,6 @@ export const handle = async (event, _ctx, _cb): Promise<any> => {
     const flags = { 'network-id': networkId };
     console.log(event.queryStringParameters);
     const provider = utils.getProvider(flags);
-    // Hack to prevent block polling
-    (provider as any)._ready.go();
     const explainer = new TxExplainer(provider, networkId);
     const result = await explainer.explainTransactionAsync(txHash);
     provider.stop();
