@@ -1,5 +1,12 @@
 // tslint:disable:forin
-import { ContractWrappers, Order, OrderInfo, OrderStatus, SignedOrder } from '@0x/contract-wrappers';
+import {
+    ContractWrappers,
+    ERC20TokenContract,
+    Order,
+    OrderInfo,
+    OrderStatus,
+    SignedOrder,
+} from '@0x/contract-wrappers';
 import { BigNumber } from '@0x/utils';
 import { Web3Wrapper } from '@0x/web3-wrapper';
 import {
@@ -13,6 +20,8 @@ import {
 } from 'ethereum-types';
 import * as _ from 'lodash';
 import ora = require('ora');
+
+import { utils } from '../utils';
 
 const DECIMALS = 18;
 const UNLIMITED_ALLOWANCE_IN_BASE_UNITS = new BigNumber(2).pow(256).minus(1);
@@ -154,9 +163,9 @@ export class PrintUtils {
         this._web3Wrapper = web3Wrapper;
         this._accounts = accounts;
         this._tokens = tokens;
-        this._web3Wrapper.abiDecoder.addABI(contractWrappers.exchange.abi);
-        this._web3Wrapper.abiDecoder.addABI(contractWrappers.erc20Token.abi);
-        this._web3Wrapper.abiDecoder.addABI(contractWrappers.erc721Token.abi);
+        // TODO(dekz): don't load ABIs into both
+        utils.loadABIs(this._web3Wrapper);
+        utils.loadABIs(this._contractWrappers);
     }
     public printAccounts(): void {
         const data: string[][] = [];
@@ -176,11 +185,8 @@ export class PrintUtils {
             const tokenAddress = this._tokens[tokenSymbol];
             for (const account in this._accounts) {
                 const address = this._accounts[account];
-                const balanceBaseUnits = await this._contractWrappers.erc20Token.getBalanceAsync(
-                    tokenAddress,
-                    address,
-                    { defaultBlock: blockNumber },
-                );
+                const tokenContract = new ERC20TokenContract(tokenAddress, this._web3Wrapper.getProvider());
+                const balanceBaseUnits = await tokenContract.balanceOf.callAsync(address, {}, blockNumber);
                 const balance = Web3Wrapper.toUnitAmount(balanceBaseUnits, DECIMALS);
                 balances.push(balance.toString());
             }
@@ -215,13 +221,14 @@ export class PrintUtils {
             const tokenAddress = this._tokens[tokenSymbol];
             for (const account in this._accounts) {
                 const address = this._accounts[account];
-                const balance = await this._contractWrappers.erc20Token.getAllowanceAsync(
-                    tokenAddress,
+                const tokenContract = new ERC20TokenContract(tokenAddress, this._web3Wrapper.getProvider());
+                const approvalBaseUnits = await tokenContract.allowance.callAsync(
                     address,
                     erc20ProxyAddress,
-                    { defaultBlock: blockNumber },
+                    {},
+                    blockNumber,
                 );
-                allowances.push(balance.toString());
+                allowances.push(approvalBaseUnits.toString());
             }
             flattenedAllowances.push(allowances);
         }

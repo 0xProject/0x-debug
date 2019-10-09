@@ -1,5 +1,5 @@
-import { AssetProxyOwner, ERC20Proxy, Exchange, Forwarder } from '@0x/contract-artifacts';
 import { ContractWrappers } from '@0x/contract-wrappers';
+import { RevertError } from '@0x/utils';
 import { DecodedCalldata, Web3Wrapper } from '@0x/web3-wrapper';
 import { Command, flags } from '@oclif/command';
 
@@ -8,64 +8,6 @@ import { abiDecodePrinter } from '../printers/abi_decode_printer';
 import { jsonPrinter } from '../printers/json_printer';
 import { txExplainerUtils } from '../tx_explainer';
 import { utils } from '../utils';
-
-const revertWithReasonABI = {
-    constant: true,
-    inputs: [
-        {
-            name: 'error',
-            type: 'string',
-        },
-    ],
-    name: 'Error',
-    outputs: [
-        {
-            name: 'error',
-            type: 'string',
-        },
-    ],
-    payable: false,
-    stateMutability: 'view',
-    type: 'function',
-};
-const erc20TokenAbi = {
-    constant: true,
-    inputs: [
-        {
-            name: 'token',
-            type: 'address',
-        },
-    ],
-    name: 'ERC20Token',
-    outputs: [
-        {
-            name: 'token',
-            type: 'string',
-        },
-    ],
-    payable: false,
-    stateMutability: 'view',
-    type: 'function',
-};
-
-const erc721TokenAbi = {
-    constant: true,
-    inputs: [
-        {
-            name: 'token',
-            type: 'address',
-        },
-        {
-            name: 'id',
-            type: 'uint256',
-        },
-    ],
-    name: 'ERC721Token',
-    outputs: [],
-    payable: false,
-    stateMutability: 'view',
-    type: 'function',
-};
 
 export class AbiDecode extends Command {
     public static description = 'Decodes ABI data for known ABI';
@@ -89,13 +31,7 @@ export class AbiDecode extends Command {
         const networkId = utils.getNetworkId(flags);
         const contractWrappers = new ContractWrappers(provider, { networkId });
         const abiDecoder = contractWrappers.getAbiDecoder();
-        abiDecoder.addABI((Exchange as any).compilerOutput.abi, 'Exchange');
-        abiDecoder.addABI((ERC20Proxy as any).compilerOutput.abi, 'ERC20Proxy');
-        abiDecoder.addABI((Forwarder as any).compilerOutput.abi, 'Forwarder');
-        abiDecoder.addABI((AssetProxyOwner as any).compilerOutput.abi, 'AssetProxyOwner');
-        abiDecoder.addABI([erc20TokenAbi], 'ERC20Token');
-        abiDecoder.addABI([erc721TokenAbi], 'ERC721Token');
-        abiDecoder.addABI([revertWithReasonABI], 'Revert');
+        utils.loadABIs(contractWrappers);
         const outputs: DecodedCalldata[] = [];
         if (flags.tx) {
             const web3Wrapper = new Web3Wrapper(provider);
@@ -104,9 +40,25 @@ export class AbiDecode extends Command {
                 outputs.push(explainedTx.decodedInput);
             }
         } else {
+            // HACK: (dekz) clean this up
             for (const arg of argv) {
-                const decodedCallData = abiDecoder.decodeCalldataOrThrow(arg);
-                outputs.push(decodedCallData);
+                let decodedCallData;
+                try {
+                    decodedCallData = RevertError.decode(arg, false);
+                    outputs.push({
+                        functionName: decodedCallData.name,
+                        functionSignature: decodedCallData.selector,
+                        functionArguments: [decodedCallData.toString()],
+                    });
+                } catch {
+                    // do nothing
+                }
+                try {
+                    decodedCallData = abiDecoder.decodeCalldataOrThrow(arg);
+                    outputs.push(decodedCallData);
+                } catch (e) {
+                    // do nothing
+                }
             }
         }
         for (const output of outputs) {

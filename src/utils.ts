@@ -1,8 +1,14 @@
-import { AssetProxyOwner, Forwarder } from '@0x/contract-artifacts';
-import { ContractWrappers } from '@0x/contract-wrappers';
+import {
+    AssetProxyOwnerContract,
+    ERC20TokenContract,
+    ERC721TokenContract,
+    ExchangeContract,
+    ForwarderContract,
+} from '@0x/abi-gen-wrappers';
+import { ContractWrappers, MethodAbi } from '@0x/contract-wrappers';
 import { assetDataUtils } from '@0x/order-utils';
 import { ERC20AssetData, Order, SignedOrder } from '@0x/types';
-import { MethodAbi, Web3Wrapper } from '@0x/web3-wrapper';
+import { Web3Wrapper } from '@0x/web3-wrapper';
 import _ = require('lodash');
 // tslint:disable:no-implicit-dependencies no-var-requires
 const Web3ProviderEngine = require('web3-provider-engine');
@@ -10,7 +16,6 @@ const RpcSubprovider = require('web3-provider-engine/subproviders/rpc.js');
 
 enum Networks {
     Mainnet = 1,
-    Rinkeby = 4,
     Goerli = 5,
     Ropsten = 3,
     Kovan = 42,
@@ -18,10 +23,9 @@ enum Networks {
 }
 
 const NETWORK_ID_TO_RPC_URL: { [key in Networks]: string } = {
-    [Networks.Kovan]: 'https://kovan.infura.io/v3/d88014795f184ec4acc54d90bbf06dac',
-    [Networks.Mainnet]: 'https://mainnet.infura.io/v3/d88014795f184ec4acc54d90bbf06dac',
-    [Networks.Ropsten]: 'https://ropsten.infura.io/v3/d88014795f184ec4acc54d90bbf06dac',
-    [Networks.Rinkeby]: 'https://rinkeby.infura.io/v3/d88014795f184ec4acc54d90bbf06dac',
+    [Networks.Kovan]: 'https://kovan.infura.io/v3/1e72108f28f046ae911df32c932c9bc6',
+    [Networks.Mainnet]: 'https://mainnet.infura.io',
+    [Networks.Ropsten]: 'https://ropsten.infura.io/v3/1e72108f28f046ae911df32c932c9bc6',
     [Networks.Goerli]: 'http://localhost:8545',
     [Networks.Ganache]: 'http://localhost:8545',
 };
@@ -47,24 +51,21 @@ const revertWithReasonABI: MethodAbi = {
 };
 
 export const utils = {
-    loadABIs(web3Wrapper: Web3Wrapper, contractWrappers: ContractWrappers): void {
-        const abiDecoder = contractWrappers.getAbiDecoder();
-        web3Wrapper.abiDecoder.addABI(contractWrappers.exchange.abi);
-        web3Wrapper.abiDecoder.addABI(contractWrappers.erc20Token.abi);
-        web3Wrapper.abiDecoder.addABI(contractWrappers.erc721Token.abi);
-        abiDecoder.addABI([revertWithReasonABI], 'Revert');
-        web3Wrapper.abiDecoder.addABI([revertWithReasonABI], 'Revert');
-        abiDecoder.addABI((AssetProxyOwner as any).compilerOutput.abi, 'AssetProxyOwner');
-        web3Wrapper.abiDecoder.addABI((AssetProxyOwner as any).compilerOutput.abi);
-        abiDecoder.addABI((Forwarder as any).compilerOutput.abi, 'Forwarder');
-        web3Wrapper.abiDecoder.addABI(contractWrappers.forwarder.abi);
-    },
     getNetworkId(flags: any): number {
         const networkId = flags['network-id'];
         if (!networkId) {
             throw new Error('NETWORK_ID_REQUIRED');
         }
         return networkId;
+    },
+    loadABIs(wrapper: ContractWrappers | Web3Wrapper): void {
+        const abiDecoder = (wrapper as Web3Wrapper).abiDecoder || (wrapper as ContractWrappers).getAbiDecoder();
+        abiDecoder.addABI(ExchangeContract.ABI(), 'Exchange');
+        abiDecoder.addABI(ERC20TokenContract.ABI(), 'ERC20Token');
+        abiDecoder.addABI(ERC721TokenContract.ABI(), 'ERC721Token');
+        abiDecoder.addABI(ForwarderContract.ABI(), 'Forwarder');
+        abiDecoder.addABI(AssetProxyOwnerContract.ABI(), 'AssetProxyOwner');
+        abiDecoder.addABI([revertWithReasonABI], 'Revert');
     },
     getProvider(flags: any): any {
         const networkId = utils.getNetworkId(flags);
@@ -76,7 +77,7 @@ export const utils = {
     },
     getNetworkRPCOrThrow(networkId: Networks): string {
         const url = NETWORK_ID_TO_RPC_URL[networkId];
-        if (url === undefined) {
+        if (_.isUndefined(url)) {
             throw new Error('UNSUPPORTED_NETWORK');
         }
         return url;
@@ -84,12 +85,17 @@ export const utils = {
     extractOrders(inputArguments: any, to: string, contractWrappers: ContractWrappers): Order[] | SignedOrder[] {
         let orders: Order[] = [];
         if (inputArguments.order) {
-            orders.push(inputArguments.order);
+            const order = inputArguments.order;
+            if (inputArguments.signature) {
+                (order as SignedOrder).signature = inputArguments.signature;
+            }
+            orders.push(order);
         } else if (inputArguments.orders) {
             orders = inputArguments.orders;
 
             if (inputArguments.signatures) {
                 _.forEach(orders, (order, index) => {
+                    console.log(inputArguments.signatures);
                     (order as SignedOrder).signature = inputArguments.signatures[index];
                 });
             }
@@ -107,9 +113,7 @@ export const utils = {
             }
             // Forwarder assumes the taker asset is WETH
             if (order.takerAssetData === '0x' && to === contractWrappers.forwarder.address) {
-                order.takerAssetData = assetDataUtils.encodeERC20AssetData(
-                    contractWrappers.forwarder.etherTokenAddress,
-                );
+                order.takerAssetData = assetDataUtils.encodeERC20AssetData(contractWrappers.weth9.address);
             }
         });
         return orders;

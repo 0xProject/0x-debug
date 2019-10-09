@@ -1,6 +1,5 @@
 // Decodes any 0x transaction
-import { OrderValidatorContract } from '@0x/abi-gen-wrappers';
-import { AssetProxyOwner, Forwarder } from '@0x/contract-artifacts';
+import { DevUtilsContract, getContractAddressesForNetworkOrThrow } from '@0x/abi-gen-wrappers';
 import { ContractWrappers } from '@0x/contract-wrappers';
 import { Order, SignedOrder } from '@0x/types';
 import { AbiDecoder, BigNumber, DecodedCalldata } from '@0x/utils';
@@ -9,12 +8,10 @@ import {
     CallData,
     DecodedLogArgs,
     LogWithDecodedArgs,
-    MethodAbi,
     Provider,
     TransactionReceipt,
     TransactionReceiptWithDecodedLogs,
 } from 'ethereum-types';
-import * as _ from 'lodash';
 
 import { ExplainedTransactionOutput } from './types';
 import { utils } from './utils';
@@ -31,7 +28,6 @@ interface ExplainedTransaction {
     value?: BigNumber;
     txReceipt: TransactionReceipt;
     blockNumber: number;
-    callData?: string;
 }
 export const txExplainerUtils = {
     async explainTransactionAsync(
@@ -87,7 +83,6 @@ export const txExplainerUtils = {
             decodedLogs,
             revertReason,
             txReceipt,
-            callData: tx.input,
         };
     },
     async decodeRevertReasonAsync(
@@ -130,33 +125,16 @@ export const txExplainerUtils = {
     },
 };
 
-const revertWithReasonABI: MethodAbi = {
-    constant: true,
-    inputs: [
-        {
-            name: 'error',
-            type: 'string',
-        },
-    ],
-    name: 'Error',
-    outputs: [
-        {
-            name: 'error',
-            type: 'string',
-        },
-    ],
-    payable: false,
-    stateMutability: 'view',
-    type: 'function',
-};
-
 export class TxExplainer {
     private _web3Wrapper: Web3Wrapper;
     private _contractWrappers: ContractWrappers;
+    private _networkId: number;
     constructor(provider: Provider, networkId: number) {
+        this._networkId = networkId;
         this._contractWrappers = new ContractWrappers(provider, { networkId });
-        this._web3Wrapper = new Web3Wrapper(provider);
-        utils.loadABIs(this._web3Wrapper, this._contractWrappers);
+        const web3Wrapper = new Web3Wrapper(provider);
+        this._web3Wrapper = web3Wrapper;
+        utils.loadABIs(web3Wrapper);
     }
 
     public async explainTransactionAsync(txHash: string): Promise<ExplainedTransactionOutput> {
@@ -166,29 +144,48 @@ export class TxExplainer {
         const decodedTx = await txExplainerUtils.explainTransactionAsync(
             this._web3Wrapper,
             txHash,
-            this._contractWrappers.getAbiDecoder(),
+            this._web3Wrapper.abiDecoder,
         );
         const inputArguments = decodedTx.decodedInput.functionArguments;
         const orders: Order[] = utils.extractOrders(inputArguments, decodedTx.txReceipt.to, this._contractWrappers);
         const { accounts, tokens } = utils.extractAccountsAndTokens(orders);
         const taker = decodedTx.txReceipt.from;
-        const contract: OrderValidatorContract = await (this._contractWrappers
-            .orderValidator as any)._getOrderValidatorContractAsync();
-        const ordersAndTradersInfo = await contract.getOrdersAndTradersInfo.callAsync(
-            orders as SignedOrder[],
-            _.map(orders, _o => taker),
-            {},
-            decodedTx.blockNumber,
-        );
-        const orderInfos = ordersAndTradersInfo[0];
-        const traderInfos = ordersAndTradersInfo[1];
-        const orderAndTraderInfo = _.map(orderInfos, (orderInfo, index) => {
-            const traderInfo = traderInfos[index];
-            return {
-                orderInfo,
-                traderInfo,
-            };
-        });
+        const addresses = getContractAddressesForNetworkOrThrow(this._networkId);
+        const devUtils = new DevUtilsContract(addresses.devUtils, this._web3Wrapper.getProvider());
+
+        try {
+            const signedOrders = orders as SignedOrder[];
+            const signatures = signedOrders.map(o => o.signature);
+            // HACK(dekz): Deployed Kovan DevUtils current has the issue with handling '0x' fee asset data
+            signedOrders[0].makerFeeAssetData = signedOrders[0].makerAssetData;
+            signedOrders[0].takerFeeAssetData = signedOrders[0].takerAssetData;
+
+            const [orderStates, isValid, fillableAmounts] = await devUtils.getOrderRelevantStates.callAsync(
+                signedOrders,
+                signatures,
+                {},
+                decodedTx.blockNumber,
+            );
+            console.log(orderStates);
+        } catch (e) {
+            console.log(e);
+        }
+
+        // const ordersAndTradersInfo = await devUtils.getOrdersAndTradersInfo.callAsync(
+        //     orders as SignedOrder[],
+        //     _.map(orders, _o => taker),
+        //     {},
+        //     decodedTx.blockNumber,
+        // );
+        // const orderInfos = ordersAndTradersInfo[0];
+        // const traderInfos = ordersAndTradersInfo[1];
+        // const orderAndTraderInfo = _.map(orderInfos, (orderInfo, index) => {
+        //     const traderInfo = traderInfos[index];
+        //     return {
+        //         orderInfo,
+        //         traderInfo,
+        //     };
+        // });
         const output = {
             accounts: {
                 ...accounts,
@@ -196,7 +193,7 @@ export class TxExplainer {
             },
             tokens,
             orders,
-            orderAndTraderInfo,
+            orderAndTraderInfo: {},
             logs: decodedTx.decodedLogs,
             revertReason: decodedTx.revertReason,
             functionName: decodedTx.decodedInput.functionName,
@@ -204,7 +201,6 @@ export class TxExplainer {
             txStatus: decodedTx.txReceipt.status,
             gasUsed: decodedTx.txReceipt.gasUsed,
             blockNumber: decodedTx.txReceipt.blockNumber,
-            callData: decodedTx.callData,
         };
         return output;
     }
