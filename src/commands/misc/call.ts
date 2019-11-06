@@ -3,14 +3,14 @@ import { BigNumber, providerUtils } from '@0x/utils';
 import { BlockParamLiteral, CallData, Web3Wrapper } from '@0x/web3-wrapper';
 import { Command, flags } from '@oclif/command';
 
-import { defaultFlags, renderFlags } from '../global_flags';
-import { jsonPrinter } from '../printers/json_printer';
-import { utils } from '../utils';
+import { defaultFlags, renderFlags } from '../../global_flags';
+import { jsonPrinter } from '../../printers/json_printer';
+import { utils } from '../../utils';
 
 export class Call extends Command {
     public static description = 'Call the Ethereum transaction';
 
-    public static examples = [`$ 0x-debug call [address] [callData]`];
+    public static examples = [`$ 0x-debug misc:call [address] [callData]`];
 
     public static flags = {
         help: flags.help({ char: 'h' }),
@@ -47,17 +47,14 @@ export class Call extends Command {
         providerUtils.startProviderEngine(provider);
         const web3Wrapper = new Web3Wrapper(provider);
         const contractWrappers = new ContractWrappers(provider, { networkId });
-        utils.loadABIs(web3Wrapper, contractWrappers);
+        utils.loadABIs(web3Wrapper);
         let callResult;
         try {
             // Result can throw (out of gas etc)
             callResult = await web3Wrapper.callAsync(callData, blockNumber);
         } catch (e) {
-            console.log(e);
-            return;
+            return this.error(e);
         }
-        const gasEstimate = await web3Wrapper.estimateGasAsync(callData);
-        console.log('gasEstimate', gasEstimate);
         let output;
         try {
             // check output is an revert with reason
@@ -65,7 +62,9 @@ export class Call extends Command {
             await jsonPrinter.printConsole(output);
             provider.stop();
             return;
-        } catch (e) {}
+        } catch (e) {
+            this.warn(e);
+        }
         try {
             const parsedCallData = web3Wrapper.abiDecoder.decodeCalldataOrThrow(callDataInput);
             let decoder;

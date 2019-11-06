@@ -7,7 +7,9 @@ import {
 } from '@0x/abi-gen-wrappers';
 import { ContractWrappers, MethodAbi } from '@0x/contract-wrappers';
 import { assetDataUtils } from '@0x/order-utils';
+import { PrivateKeyWalletSubprovider } from '@0x/subproviders';
 import { ERC20AssetData, Order, SignedOrder } from '@0x/types';
+import { providerUtils } from '@0x/utils';
 import { Web3Wrapper } from '@0x/web3-wrapper';
 import _ = require('lodash');
 // tslint:disable:no-implicit-dependencies no-var-requires
@@ -23,8 +25,8 @@ enum Networks {
 }
 
 const NETWORK_ID_TO_RPC_URL: { [key in Networks]: string } = {
+    [Networks.Mainnet]: 'https://mainnet.0x.org',
     [Networks.Kovan]: 'https://kovan.infura.io/v3/1e72108f28f046ae911df32c932c9bc6',
-    [Networks.Mainnet]: 'https://mainnet.infura.io',
     [Networks.Ropsten]: 'https://ropsten.infura.io/v3/1e72108f28f046ae911df32c932c9bc6',
     [Networks.Goerli]: 'http://localhost:8545',
     [Networks.Ganache]: 'http://localhost:8545',
@@ -67,12 +69,22 @@ export const utils = {
         abiDecoder.addABI(AssetProxyOwnerContract.ABI(), 'AssetProxyOwner');
         abiDecoder.addABI([revertWithReasonABI], 'Revert');
     },
+    getPrivateKeyProvider(flags: any): any {
+        const networkId = utils.getNetworkId(flags);
+        const rpcSubprovider = new RpcSubprovider({ rpcUrl: utils.getNetworkRPCOrThrow(networkId) });
+        const privateKeySubprovider = new PrivateKeyWalletSubprovider(flags['private-key']);
+        const provider = new Web3ProviderEngine();
+        provider.addProvider(privateKeySubprovider);
+        provider.addProvider(rpcSubprovider);
+        providerUtils.startProviderEngine(provider);
+        return provider;
+    },
     getProvider(flags: any): any {
         const networkId = utils.getNetworkId(flags);
         const rpcSubprovider = new RpcSubprovider({ rpcUrl: utils.getNetworkRPCOrThrow(networkId) });
         const provider = new Web3ProviderEngine();
         provider.addProvider(rpcSubprovider);
-        (provider as any)._ready.go();
+        providerUtils.startProviderEngine(provider);
         return provider;
     },
     getNetworkRPCOrThrow(networkId: Networks): string {

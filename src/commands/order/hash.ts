@@ -2,11 +2,11 @@ import { ContractWrappers } from '@0x/contract-wrappers';
 import { orderHashUtils, signatureUtils } from '@0x/order-utils';
 import { Command, flags } from '@oclif/command';
 
-import { defaultFlags, renderFlags } from '../global_flags';
-import { jsonPrinter } from '../printers/json_printer';
-import { orderHashPrinter } from '../printers/order_hash_printer';
-import { OrderHashOutput } from '../types';
-import { utils } from '../utils';
+import { defaultFlags, renderFlags } from '../../global_flags';
+import { jsonPrinter } from '../../printers/json_printer';
+import { orderHashPrinter } from '../../printers/order_hash_printer';
+import { OrderHashOutput } from '../../types';
+import { utils } from '../../utils';
 
 export class OrderHash extends Command {
     public static description = 'Hashes the provided order';
@@ -40,7 +40,7 @@ export class OrderHash extends Command {
             isValidSignature ? console.log('Signature is valid!') : console.log('Signature INVALID');
         }
         const contractWrappers = new ContractWrappers(provider, { networkId });
-        const orderInfo = await contractWrappers.exchange.getOrderInfoAsync(order);
+        const orderInfo = await contractWrappers.exchange.getOrderInfo.callAsync(order);
         const output: OrderHashOutput = {
             orderInfo,
             isValidSignature,
