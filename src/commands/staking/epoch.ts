@@ -49,11 +49,13 @@ export class Epoch extends Command {
             totalWeightedStake,
             totalRewardsFinalized,
         ] = await stakingContract.aggregatedStatsByEpoch.callAsync(currentEpoch);
+        const epochEnded = epochEndTimeSeconds.isLessThan(Date.now() / 1000);
         const output = {
             currentEpoch,
             epochStartTimeSeconds,
             epochDurationInSeconds,
             epochEndTimeSeconds,
+            epochEnded,
             epochStats: {
                 rewardsAvailable,
                 numPoolsToFinalize,

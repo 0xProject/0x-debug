@@ -30,7 +30,7 @@ export class EndEpoch extends Command {
     public async run(): Promise<void> {
         const { flags, argv } = this.parse(EndEpoch);
         const provider = utils.getPrivateKeyProvider(flags);
-        const web3Wrapper = new Web3Wrapper(provider);
+        const web3Wrapper = utils.getWeb3Wrapper(provider);
         const [address] = await web3Wrapper.getAvailableAddressesAsync();
         const stakingContract = new StakingContract(stakingProxyContractAddress, provider, {});
         await stakingContract.endEpoch.callAsync({ from: address });

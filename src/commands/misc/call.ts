@@ -45,9 +45,8 @@ export class Call extends Command {
             value,
         };
         providerUtils.startProviderEngine(provider);
-        const web3Wrapper = new Web3Wrapper(provider);
-        const contractWrappers = new ContractWrappers(provider, { networkId });
-        utils.loadABIs(web3Wrapper);
+        const web3Wrapper = utils.getWeb3Wrapper(provider);
+        const contractWrappers = utils.getContractWrappersForChainId(provider, networkId);
         let callResult;
         try {
             // Result can throw (out of gas etc)

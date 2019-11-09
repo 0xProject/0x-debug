@@ -27,7 +27,7 @@ export class OrderInfoCommand extends Command {
         const provider = utils.getProvider(flags);
         const networkId = utils.getNetworkId(flags);
         const rawOrder: Order = JSON.parse(flags.order);
-        const contractWrappers = new ContractWrappers(provider, { networkId });
+        const contractWrappers = utils.getContractWrappersForChainId(provider, networkId);
         let order = rawOrder;
         const blockNumber = flags.blockNumber || BlockParamLiteral.Latest;
         if (!rawOrder.exchangeAddress) {

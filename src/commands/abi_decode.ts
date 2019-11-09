@@ -29,12 +29,11 @@ export class AbiDecode extends Command {
         const { flags, argv } = this.parse(AbiDecode);
         const provider = utils.getProvider(flags);
         const networkId = utils.getNetworkId(flags);
-        const contractWrappers = new ContractWrappers(provider, { networkId });
+        const contractWrappers = utils.getContractWrappersForChainId(provider, networkId);
         const abiDecoder = contractWrappers.getAbiDecoder();
-        utils.loadABIs(contractWrappers);
         const outputs: DecodedCalldata[] = [];
         if (flags.tx) {
-            const web3Wrapper = new Web3Wrapper(provider);
+            const web3Wrapper = utils.getWeb3Wrapper(provider);
             for (const arg of argv) {
                 const explainedTx = await txExplainerUtils.explainTransactionAsync(web3Wrapper, arg, abiDecoder);
                 outputs.push(explainedTx.decodedInput);

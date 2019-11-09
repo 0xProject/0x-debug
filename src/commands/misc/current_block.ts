@@ -25,7 +25,7 @@ export class Call extends Command {
         // tslint:disable-next-line:no-shadowed-variable
         const { args, flags } = this.parse(Call);
         const provider = utils.getProvider(flags);
-        const web3Wrapper = new Web3Wrapper(provider);
+        const web3Wrapper = utils.getWeb3Wrapper(provider);
         const result = await web3Wrapper.getBlockNumberAsync();
         console.log(result);
         provider.stop();

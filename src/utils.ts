@@ -1,17 +1,23 @@
 import {
-    AssetProxyOwnerContract,
+    CoordinatorContract,
+    ERC1155MintableContract,
     ERC20TokenContract,
     ERC721TokenContract,
     ExchangeContract,
     ForwarderContract,
+    StakingContract,
+    StakingProxyContract,
 } from '@0x/abi-gen-wrappers';
-import { ContractWrappers, MethodAbi } from '@0x/contract-wrappers';
+import { ContractWrappers, EventAbi, FallbackAbi, MethodAbi, RevertErrorAbi } from '@0x/contract-wrappers';
 import { assetDataUtils } from '@0x/order-utils';
 import { PrivateKeyWalletSubprovider } from '@0x/subproviders';
 import { ERC20AssetData, Order, SignedOrder } from '@0x/types';
 import { providerUtils } from '@0x/utils';
 import { Web3Wrapper } from '@0x/web3-wrapper';
+import * as ethers from 'ethers';
 import _ = require('lodash');
+// HACK prevent ethers from printing 'Multiple definitions for'
+ethers.errors.setLogLevel('error');
 // tslint:disable:no-implicit-dependencies no-var-requires
 const Web3ProviderEngine = require('web3-provider-engine');
 const RpcSubprovider = require('web3-provider-engine/subproviders/rpc.js');
@@ -52,7 +58,23 @@ const revertWithReasonABI: MethodAbi = {
     type: 'function',
 };
 
+let contractWrappers: ContractWrappers;
+let web3Wrapper: Web3Wrapper;
+
 export const utils = {
+    getWeb3Wrapper(provider: any): Web3Wrapper {
+        if (!web3Wrapper) {
+            web3Wrapper = new Web3Wrapper(provider);
+            utils.loadABIs(web3Wrapper);
+        }
+        return web3Wrapper;
+    },
+    getContractWrappersForChainId(provider: any, chainId: number): ContractWrappers {
+        if (!contractWrappers) {
+            contractWrappers = new ContractWrappers(provider, { chainId });
+        }
+        return contractWrappers;
+    },
     getNetworkId(flags: any): number {
         const networkId = flags['network-id'];
         if (!networkId) {
@@ -60,13 +82,22 @@ export const utils = {
         }
         return networkId;
     },
+    knownABIs(): Array<FallbackAbi | EventAbi | RevertErrorAbi> {
+        const ABIS = [
+            ...ExchangeContract.ABI(),
+            ...ForwarderContract.ABI(),
+            ...CoordinatorContract.ABI(),
+            ...StakingProxyContract.ABI(),
+            ...StakingContract.ABI(),
+            ...ERC20TokenContract.ABI(),
+            ...ERC721TokenContract.ABI(),
+            ...ERC1155MintableContract.ABI(),
+        ];
+        return ABIS;
+    },
     loadABIs(wrapper: ContractWrappers | Web3Wrapper): void {
         const abiDecoder = (wrapper as Web3Wrapper).abiDecoder || (wrapper as ContractWrappers).getAbiDecoder();
-        abiDecoder.addABI(ExchangeContract.ABI(), 'Exchange');
-        abiDecoder.addABI(ERC20TokenContract.ABI(), 'ERC20Token');
-        abiDecoder.addABI(ERC721TokenContract.ABI(), 'ERC721Token');
-        abiDecoder.addABI(ForwarderContract.ABI(), 'Forwarder');
-        abiDecoder.addABI(AssetProxyOwnerContract.ABI(), 'AssetProxyOwner');
+        abiDecoder.addABI(utils.knownABIs(), '0x');
         abiDecoder.addABI([revertWithReasonABI], 'Revert');
     },
     getPrivateKeyProvider(flags: any): any {
@@ -94,7 +125,7 @@ export const utils = {
         }
         return url;
     },
-    extractOrders(inputArguments: any, to: string, contractWrappers: ContractWrappers): Order[] | SignedOrder[] {
+    extractOrders(inputArguments: any, to: string): Order[] | SignedOrder[] {
         let orders: Order[] = [];
         if (inputArguments.order) {
             const order = inputArguments.order;
@@ -107,27 +138,10 @@ export const utils = {
 
             if (inputArguments.signatures) {
                 _.forEach(orders, (order, index) => {
-                    console.log(inputArguments.signatures);
                     (order as SignedOrder).signature = inputArguments.signatures[index];
                 });
             }
         }
-        // Normalize orders
-        const firstOrder = orders[0];
-        // Order call data can be optimised as it is assumed they are
-        // all the same asset data in some scenarios
-        _.forEach(orders, order => {
-            if (order.makerAssetData === '0x') {
-                order.makerAssetData = firstOrder.makerAssetData;
-            }
-            if (order.takerAssetData === '0x') {
-                order.takerAssetData = firstOrder.takerAssetData;
-            }
-            // Forwarder assumes the taker asset is WETH
-            if (order.takerAssetData === '0x' && to === contractWrappers.forwarder.address) {
-                order.takerAssetData = assetDataUtils.encodeERC20AssetData(contractWrappers.weth9.address);
-            }
-        });
         return orders;
     },
     extractAccountsAndTokens(

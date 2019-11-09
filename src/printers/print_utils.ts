@@ -163,9 +163,6 @@ export class PrintUtils {
         this._web3Wrapper = web3Wrapper;
         this._accounts = accounts;
         this._tokens = tokens;
-        // TODO(dekz): don't load ABIs into both
-        utils.loadABIs(this._web3Wrapper);
-        utils.loadABIs(this._contractWrappers);
     }
     public printAccounts(): void {
         const data: string[][] = [];

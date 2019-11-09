@@ -1,13 +1,19 @@
-import { CoordinatorContract, StakingContract, StakingProxyContract } from '@0x/abi-gen-wrappers';
-import { ContractWrappers, MethodAbi } from '@0x/contract-wrappers';
+import {
+    CoordinatorContract,
+    ExchangeContract,
+    ForwarderContract,
+    StakingContract,
+    StakingProxyContract,
+} from '@0x/abi-gen-wrappers';
+import { MethodAbi } from '@0x/contract-wrappers';
 import { AbiEncoder } from '@0x/utils';
-import { Web3Wrapper } from '@0x/web3-wrapper';
 import { Command, flags } from '@oclif/command';
 import * as _ from 'lodash';
 
 import { defaultFlags, renderFlags } from '../../global_flags';
 import { PrintUtils } from '../../printers/print_utils';
 import { utils } from '../../utils';
+
 // const REGISTRY_ABI = [
 //     {
 //         constant: false,
@@ -48,9 +54,8 @@ export class FunctionRegistryCheck extends Command {
     public async run(): Promise<void> {
         // tslint:disable-next-line:no-shadowed-variable
         const { flags, argv } = this.parse(FunctionRegistryCheck);
-        const provider = utils.getProvider(flags);
-        const networkId = utils.getNetworkId(flags);
-        const contractWrappers = new ContractWrappers(provider, { networkId });
+        // Registry only exists on Mainnet
+        const provider = utils.getProvider({ ...flags, 'network-id': 1 });
         const entriesFunctionAi: MethodAbi = {
             constant: true,
             inputs: [{ name: 'selectors', type: 'bytes4[]' }],
@@ -62,10 +67,10 @@ export class FunctionRegistryCheck extends Command {
         };
         const entriesSignature = new AbiEncoder.Method(entriesFunctionAi);
 
-        const web3Wrapper = new Web3Wrapper(provider);
+        const web3Wrapper = utils.getWeb3Wrapper(provider);
         const ABIS = [
-            ...contractWrappers.exchange.abi,
-            ...contractWrappers.forwarder.abi,
+            ...ExchangeContract.ABI(),
+            ...ForwarderContract.ABI(),
             ...CoordinatorContract.ABI(),
             ...StakingProxyContract.ABI(),
             ...StakingContract.ABI(),

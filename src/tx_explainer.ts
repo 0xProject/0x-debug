@@ -1,8 +1,7 @@
 // Decodes any 0x transaction
-import { DevUtilsContract, getContractAddressesForNetworkOrThrow } from '@0x/abi-gen-wrappers';
 import { ContractWrappers } from '@0x/contract-wrappers';
 import { Order, SignedOrder } from '@0x/types';
-import { AbiDecoder, BigNumber, DecodedCalldata } from '@0x/utils';
+import { AbiDecoder, BigNumber, DecodedCalldata, RevertError } from '@0x/utils';
 import { Web3Wrapper } from '@0x/web3-wrapper';
 import {
     CallData,
@@ -16,14 +15,12 @@ import {
 import { ExplainedTransactionOutput } from './types';
 import { utils } from './utils';
 
-const ERROR_PREFIX = '08c379a0';
-
 interface ExplainedTransaction {
     success: boolean;
     txHash: string;
     decodedInput: DecodedCalldata;
     decodedLogs?: Array<LogWithDecodedArgs<DecodedLogArgs>>;
-    revertReason: string | undefined;
+    revertReason: RevertError | undefined;
     gasUsed?: number;
     value?: BigNumber;
     txReceipt: TransactionReceipt;
@@ -66,12 +63,7 @@ export const txExplainerUtils = {
             decodedLogs = await txExplainerUtils.decodeLogsAsync(web3Wrapper, txReceipt);
         } else {
             // Make a call at that blockNumber to check for any revert reasons
-            revertReason = await txExplainerUtils.decodeRevertReasonAsync(
-                web3Wrapper,
-                callData,
-                blockNumber,
-                abiDecoder,
-            );
+            revertReason = await txExplainerUtils.decodeRevertReasonAsync(web3Wrapper, callData, blockNumber);
         }
         return {
             blockNumber,
@@ -89,25 +81,22 @@ export const txExplainerUtils = {
         web3Wrapper: Web3Wrapper,
         callData: CallData,
         blockNumber: number,
-        abiDecoder: AbiDecoder,
-    ): Promise<string | undefined> {
+    ): Promise<RevertError | undefined> {
         let result;
         try {
             result = await web3Wrapper.callAsync(callData, blockNumber);
         } catch (e) {
             // Handle the case where an error is thrown as "Reverted <revert with reason>" i.e Parity via RPCSubprovider
-            const errorPrefixIndex = e.data.indexOf(ERROR_PREFIX);
-            if (errorPrefixIndex >= 0) {
-                const resultRaw = e.data.slice(errorPrefixIndex);
-                result = `0x${resultRaw}`;
+            if (e.data) {
+                const errorPrefixIndex = e.data.indexOf('0x');
+                result = e.data.slice(errorPrefixIndex);
             }
         }
-        if (result !== undefined) {
-            const decodedRevertReason = abiDecoder.decodeCalldataOrThrow(result);
-            if (decodedRevertReason.functionArguments.error) {
-                return decodedRevertReason.functionArguments.error;
-            }
+        if (result) {
+            const revertError = RevertError.decode(result, true);
+            return revertError;
         }
+
         return undefined;
     },
     async decodeLogsAsync(
@@ -128,13 +117,9 @@ export const txExplainerUtils = {
 export class TxExplainer {
     private _web3Wrapper: Web3Wrapper;
     private _contractWrappers: ContractWrappers;
-    private _networkId: number;
     constructor(provider: Provider, networkId: number) {
-        this._networkId = networkId;
-        this._contractWrappers = new ContractWrappers(provider, { networkId });
-        const web3Wrapper = new Web3Wrapper(provider);
-        this._web3Wrapper = web3Wrapper;
-        utils.loadABIs(web3Wrapper);
+        this._contractWrappers = utils.getContractWrappersForChainId(provider, networkId);
+        this._web3Wrapper = utils.getWeb3Wrapper(provider);
     }
 
     public async explainTransactionAsync(txHash: string): Promise<ExplainedTransactionOutput> {
@@ -147,45 +132,28 @@ export class TxExplainer {
             this._web3Wrapper.abiDecoder,
         );
         const inputArguments = decodedTx.decodedInput.functionArguments;
-        const orders: Order[] = utils.extractOrders(inputArguments, decodedTx.txReceipt.to, this._contractWrappers);
+        const orders: Order[] = utils.extractOrders(inputArguments, decodedTx.txReceipt.to);
         const { accounts, tokens } = utils.extractAccountsAndTokens(orders);
         const taker = decodedTx.txReceipt.from;
-        const addresses = getContractAddressesForNetworkOrThrow(this._networkId);
-        const devUtils = new DevUtilsContract(addresses.devUtils, this._web3Wrapper.getProvider());
+        const devUtils = this._contractWrappers.devUtils;
 
-        try {
-            const signedOrders = orders as SignedOrder[];
-            const signatures = signedOrders.map(o => o.signature);
-            // HACK(dekz): Deployed Kovan DevUtils current has the issue with handling '0x' fee asset data
-            signedOrders[0].makerFeeAssetData = signedOrders[0].makerAssetData;
-            signedOrders[0].takerFeeAssetData = signedOrders[0].takerAssetData;
-
-            const [orderStates, isValid, fillableAmounts] = await devUtils.getOrderRelevantStates.callAsync(
-                signedOrders,
-                signatures,
-                {},
-                decodedTx.blockNumber,
-            );
-            console.log(orderStates);
-        } catch (e) {
-            console.log(e);
-        }
-
-        // const ordersAndTradersInfo = await devUtils.getOrdersAndTradersInfo.callAsync(
-        //     orders as SignedOrder[],
-        //     _.map(orders, _o => taker),
-        //     {},
-        //     decodedTx.blockNumber,
-        // );
-        // const orderInfos = ordersAndTradersInfo[0];
-        // const traderInfos = ordersAndTradersInfo[1];
-        // const orderAndTraderInfo = _.map(orderInfos, (orderInfo, index) => {
-        //     const traderInfo = traderInfos[index];
-        //     return {
-        //         orderInfo,
-        //         traderInfo,
-        //     };
-        // });
+        const [
+            orderStatus,
+            fillableTakerAssetAmounts,
+            isValidSignature,
+        ] = await devUtils.getOrderRelevantStates.callAsync(
+            orders as SignedOrder[],
+            orders.map(o => (o as SignedOrder).signature),
+            {},
+            decodedTx.blockNumber,
+        );
+        const orderInfos = orderStatus.map((_o, i) => {
+            return {
+                orderStatus: orderStatus[i],
+                fillableTakerAssetAmounts: fillableTakerAssetAmounts[i],
+                isValidSignature: isValidSignature[i],
+            };
+        });
         const output = {
             accounts: {
                 ...accounts,
@@ -201,6 +169,7 @@ export class TxExplainer {
             txStatus: decodedTx.txReceipt.status,
             gasUsed: decodedTx.txReceipt.gasUsed,
             blockNumber: decodedTx.txReceipt.blockNumber,
+            orderInfos,
         };
         return output;
     }

@@ -39,7 +39,7 @@ export class OrderHash extends Command {
             );
             isValidSignature ? console.log('Signature is valid!') : console.log('Signature INVALID');
         }
-        const contractWrappers = new ContractWrappers(provider, { networkId });
+        const contractWrappers = utils.getContractWrappersForChainId(provider, networkId);
         const orderInfo = await contractWrappers.exchange.getOrderInfo.callAsync(order);
         const output: OrderHashOutput = {
             orderInfo,

@@ -3,10 +3,10 @@ import { Command, flags } from '@oclif/command';
 
 import { renderFlags } from '../../global_flags';
 
-export class Stats extends Command {
-    public static description = 'Print the stats of a Mesh node';
+export class Orders extends Command {
+    public static description = 'Retrieves the orders from a Mesh node';
 
-    public static examples = [`$ 0x-debug mesh:stats`];
+    public static examples = [`$ 0x-debug mesh:orders`];
 
     public static flags = {
         help: flags.help({ char: 'h' }),
@@ -18,10 +18,10 @@ export class Stats extends Command {
 
     // tslint:disable-next-line:async-suffix
     public async run(): Promise<void> {
-        const { flags, argv } = this.parse(Stats);
+        const { flags, argv } = this.parse(Orders);
         const client = new WSClient(flags['mesh-url']);
-        const result = await client.getStatsAsync();
-        const output = flags.json ? JSON.stringify(result) : result;
+        const result = await client.getOrdersAsync();
+        const output = flags.json ? JSON.stringify(result) : JSON.stringify(result, null, 2);
         console.log(output);
         await client.destroy();
     }
