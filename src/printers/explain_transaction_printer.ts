@@ -1,4 +1,3 @@
-import { Web3Wrapper } from '@0x/web3-wrapper';
 import { Provider } from 'ethereum-types';
 import _ = require('lodash');
 

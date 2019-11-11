@@ -1,35 +1,33 @@
-import { StakingContract } from '@0x/abi-gen-wrappers';
+import { getContractAddressesForChainOrThrow, StakingContract } from '@0x/abi-gen-wrappers';
 import { Command, flags } from '@oclif/command';
 
-import { defaultFlags, renderFlags } from '../../global_flags';
-import { utils } from '../../utils';
+import { DEFAULT_READALE_FLAGS, DEFAULT_RENDER_FLAGS } from '../../../global_flags';
+import { utils } from '../../../utils';
 
 enum StakeStatus {
     Undelegated,
     Delegated,
 }
 
-const stakingProxyContractAddress = '0xbab9145f1d57cd4bb0c9aa2d1ece0a5b6e734d34';
-
-export class Epoch extends Command {
+export class Stats extends Command {
     public static description = 'Details for the current Staking Epoch';
 
-    public static examples = [`$ 0x-debug staking:epoch`];
+    public static examples = [`$ 0x-debug staking:pool:stats`];
 
     public static flags = {
-        help: flags.help({ char: 'h' }),
-        'network-id': defaultFlags.networkId(),
-        'pool-id': flags.string(),
-        json: renderFlags.json,
+        'pool-id': flags.string({ required: true }),
+        ...DEFAULT_RENDER_FLAGS,
+        ...DEFAULT_READALE_FLAGS,
     };
     public static args = [];
     public static strict = false;
 
     // tslint:disable-next-line:async-suffix
     public async run(): Promise<void> {
-        const { flags, argv } = this.parse(Epoch);
-        const provider = utils.getProvider(flags);
-        const stakingContract = new StakingContract(stakingProxyContractAddress, provider, {});
+        const { flags, argv } = this.parse(Stats);
+        const { provider, networkId } = utils.getReadableContext(flags);
+        const addresses = getContractAddressesForChainOrThrow(networkId);
+        const stakingContract = new StakingContract(addresses.stakingProxy, provider, {});
         const currentEpoch = await stakingContract.currentEpoch.callAsync();
         const rawPoolId = flags['pool-id'];
         const globalDelegatedStake = await stakingContract.getGlobalStakeByStatus.callAsync(StakeStatus.Delegated);

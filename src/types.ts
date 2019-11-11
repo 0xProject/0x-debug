@@ -1,11 +1,6 @@
-import {
-    BalanceAndAllowance,
-    DecodedLogArgs,
-    LogWithDecodedArgs,
-    OrderAndTraderInfo,
-    OrderInfo,
-} from '@0x/contract-wrappers';
+import { ContractWrappers, DecodedLogArgs, LogWithDecodedArgs, OrderInfo } from '@0x/contract-wrappers';
 import { Order } from '@0x/types';
+import { Web3Wrapper } from '@0x/web3-wrapper';
 import { TransactionReceiptStatus } from 'ethereum-types';
 
 export interface NetworkSpecificConfigs {
@@ -29,7 +24,7 @@ export interface ExplainedTransactionOutput {
     accounts: Accounts;
     tokens: Tokens;
     orders: Order[];
-    orderAndTraderInfo: OrderAndTraderInfo[];
+    orderAndTraderInfo: any[];
     revertReason?: string;
     logs?: Array<LogWithDecodedArgs<DecodedLogArgs>>;
     functionName: string;
@@ -38,10 +33,37 @@ export interface ExplainedTransactionOutput {
 
 export interface OrderInfoOutput {
     orderInfo: OrderInfo;
-    balanceAndAllowance?: BalanceAndAllowance;
+    balanceAndAllowance?: any;
 }
 
 export interface OrderHashOutput {
     orderInfo: OrderInfo;
     isValidSignature?: boolean;
+}
+
+export enum WriteableProviderType {
+    PrivateKey = 'PRIVATE_KEY',
+    Mnemonic = 'MNEMONIC',
+    WalletConnect = 'WALLET_CONNECT',
+}
+export interface ReadableContext {
+    provider: any;
+    web3Wrapper: Web3Wrapper;
+    contractWrappers: ContractWrappers;
+    networkId: number;
+    chainId: number;
+}
+
+export interface WriteableContext extends ReadableContext {
+    providerType: WriteableProviderType;
+    selectedAddress: string;
+}
+
+export enum Networks {
+    Mainnet = 1,
+    Ropsten = 3,
+    Rinkeby = 4,
+    Goerli = 5,
+    Kovan = 42,
+    Ganache = 50,
 }

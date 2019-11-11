@@ -1,5 +1,6 @@
 import {
     CoordinatorContract,
+    DevUtilsContract,
     ERC1155MintableContract,
     ERC20TokenContract,
     ERC721TokenContract,
@@ -8,32 +9,33 @@ import {
     StakingContract,
     StakingProxyContract,
 } from '@0x/abi-gen-wrappers';
+import { PromiseWithTransactionHash } from '@0x/base-contract';
 import { ContractWrappers, EventAbi, FallbackAbi, MethodAbi, RevertErrorAbi } from '@0x/contract-wrappers';
 import { assetDataUtils } from '@0x/order-utils';
-import { PrivateKeyWalletSubprovider } from '@0x/subproviders';
+import { MnemonicWalletSubprovider, PrivateKeyWalletSubprovider } from '@0x/subproviders';
 import { ERC20AssetData, Order, SignedOrder } from '@0x/types';
 import { providerUtils } from '@0x/utils';
-import { Web3Wrapper } from '@0x/web3-wrapper';
+import { TransactionReceiptWithDecodedLogs, Web3Wrapper } from '@0x/web3-wrapper';
 import * as ethers from 'ethers';
+import inquirer = require('inquirer');
 import _ = require('lodash');
+import { printTextAsQR, WalletConnect } from 'walletconnect-node';
+
+import { prompt } from './prompt';
+import { Networks, ReadableContext, WriteableContext, WriteableProviderType } from './types';
+import { WalletConnectSubprovider } from './wallet_connnect_subprovider';
+const ora = require('ora');
 // HACK prevent ethers from printing 'Multiple definitions for'
 ethers.errors.setLogLevel('error');
 // tslint:disable:no-implicit-dependencies no-var-requires
 const Web3ProviderEngine = require('web3-provider-engine');
 const RpcSubprovider = require('web3-provider-engine/subproviders/rpc.js');
 
-enum Networks {
-    Mainnet = 1,
-    Goerli = 5,
-    Ropsten = 3,
-    Kovan = 42,
-    Ganache = 50,
-}
-
 const NETWORK_ID_TO_RPC_URL: { [key in Networks]: string } = {
     [Networks.Mainnet]: 'https://mainnet.0x.org',
     [Networks.Kovan]: 'https://kovan.infura.io/v3/1e72108f28f046ae911df32c932c9bc6',
     [Networks.Ropsten]: 'https://ropsten.infura.io/v3/1e72108f28f046ae911df32c932c9bc6',
+    [Networks.Rinkeby]: 'https://rinkeby.infura.io/v3/1e72108f28f046ae911df32c932c9bc6',
     [Networks.Goerli]: 'http://localhost:8545',
     [Networks.Ganache]: 'http://localhost:8545',
 };
@@ -60,6 +62,8 @@ const revertWithReasonABI: MethodAbi = {
 
 let contractWrappers: ContractWrappers;
 let web3Wrapper: Web3Wrapper;
+let walletConnector: WalletConnect;
+let walletConnectSubprovider: WalletConnectSubprovider;
 
 export const utils = {
     getWeb3Wrapper(provider: any): Web3Wrapper {
@@ -100,23 +104,116 @@ export const utils = {
         abiDecoder.addABI(utils.knownABIs(), '0x');
         abiDecoder.addABI([revertWithReasonABI], 'Revert');
     },
-    getPrivateKeyProvider(flags: any): any {
+    getRpcSubprovider(flags: any): any {
         const networkId = utils.getNetworkId(flags);
         const rpcSubprovider = new RpcSubprovider({ rpcUrl: utils.getNetworkRPCOrThrow(networkId) });
-        const privateKeySubprovider = new PrivateKeyWalletSubprovider(flags['private-key']);
-        const provider = new Web3ProviderEngine();
-        provider.addProvider(privateKeySubprovider);
-        provider.addProvider(rpcSubprovider);
-        providerUtils.startProviderEngine(provider);
-        return provider;
+        return rpcSubprovider;
     },
-    getProvider(flags: any): any {
+    getReadableContext(flags: any): ReadableContext {
         const networkId = utils.getNetworkId(flags);
-        const rpcSubprovider = new RpcSubprovider({ rpcUrl: utils.getNetworkRPCOrThrow(networkId) });
         const provider = new Web3ProviderEngine();
-        provider.addProvider(rpcSubprovider);
+        provider.addProvider(utils.getRpcSubprovider(flags));
         providerUtils.startProviderEngine(provider);
-        return provider;
+        web3Wrapper = new Web3Wrapper(provider);
+        contractWrappers = new ContractWrappers(provider, { chainId: networkId });
+        const context = {
+            networkId,
+            chainId: networkId,
+            provider,
+            web3Wrapper,
+            contractWrappers,
+        };
+        return context;
+    },
+    async getWriteableContextAsync(flags: any): Promise<WriteableContext> {
+        const privKeyFlag = flags['private-key'];
+        const mnemonicFlag = flags.mnemonic;
+        let writeableProvider;
+        let providerType: WriteableProviderType;
+        if (!privKeyFlag && !mnemonicFlag) {
+            providerType = (await prompt.selectWriteableProviderAsync()).providerType;
+            switch (providerType) {
+                case WriteableProviderType.WalletConnect:
+                    writeableProvider = await utils.getWalletConnectProviderAsync();
+                    break;
+                case WriteableProviderType.PrivateKey:
+                    const { privateKey } = await prompt.promptForPrivateKeyAsync();
+                    writeableProvider = new PrivateKeyWalletSubprovider(privateKey);
+                    break;
+                case WriteableProviderType.Mnemonic:
+                    const { baseDerivationPath, mnemonic } = await prompt.promptForMnemonicDetailsAsync();
+                    writeableProvider = new MnemonicWalletSubprovider({
+                        mnemonic,
+                        baseDerivationPath,
+                    });
+                    break;
+                default:
+                    throw new Error('Provider is currently unsupported');
+            }
+        } else {
+            if (privKeyFlag) {
+                writeableProvider = new PrivateKeyWalletSubprovider(privKeyFlag);
+                providerType = WriteableProviderType.PrivateKey;
+            } else {
+                writeableProvider = new MnemonicWalletSubprovider({ mnemonic: mnemonicFlag });
+                providerType = WriteableProviderType.Mnemonic;
+            }
+        }
+        const networkId = utils.getNetworkId(flags);
+        const provider = new Web3ProviderEngine();
+        provider.addProvider(writeableProvider);
+        provider.addProvider(utils.getRpcSubprovider(flags));
+        providerUtils.startProviderEngine(provider);
+        web3Wrapper = new Web3Wrapper(provider);
+        contractWrappers = new ContractWrappers(provider, { chainId: networkId });
+        const accounts = await web3Wrapper.getAvailableAddressesAsync();
+        const selectedAddress =
+            accounts.length > 1
+                ? (await prompt.selectAddressAsync(accounts, contractWrappers.devUtils)).selectedAddress
+                : accounts[0];
+        return {
+            provider,
+            providerType,
+            selectedAddress,
+            web3Wrapper,
+            networkId,
+            chainId: networkId,
+            contractWrappers,
+        };
+    },
+    stopProvider(provider: any): void {
+        provider.stop();
+        if (walletConnector) {
+            void walletConnector.killSession();
+        }
+    },
+    async getWalletConnectProviderAsync(): Promise<WalletConnectSubprovider> {
+        if (walletConnectSubprovider) {
+            return walletConnectSubprovider;
+        }
+        walletConnector = new WalletConnect({
+            bridge: 'https://bridge.walletconnect.org',
+        });
+        walletConnectSubprovider = new WalletConnectSubprovider(walletConnector);
+        return new Promise((resolve, reject) => {
+            if (!walletConnector.connected) {
+                walletConnector.createSession().then(() => printTextAsQR(walletConnector.uri));
+            }
+            walletConnector.on('connect', (error, payload) =>
+                error ? reject(error) : resolve(walletConnectSubprovider),
+            );
+            walletConnector.on('session_update', (error, payload) => {
+                if (error) {
+                    throw error;
+                }
+            });
+
+            walletConnector.on('disconnect', (error, payload) => {
+                if (error) {
+                    throw error;
+                }
+            });
+        });
     },
     getNetworkRPCOrThrow(networkId: Networks): string {
         const url = NETWORK_ID_TO_RPC_URL[networkId];
@@ -165,6 +262,21 @@ export const utils = {
             [`maker${position}`]: order.makerAddress,
         };
         return accounts;
+    },
+    async awaitTransactionWithSpinnerAsync(
+        name: string,
+        fnAsync: () => PromiseWithTransactionHash<TransactionReceiptWithDecodedLogs>,
+    ): Promise<TransactionReceiptWithDecodedLogs> {
+        const spinner = ora(name).start();
+        let result;
+        try {
+            result = await fnAsync();
+        } catch (e) {
+            spinner.fail(e.message);
+            throw e;
+        }
+        spinner.stop();
+        return result;
     },
     extractTokens(order: Order, position: string = ''): { [key: string]: string } {
         const makerAssetData = assetDataUtils.decodeAssetDataOrThrow(order.makerAssetData) as ERC20AssetData;

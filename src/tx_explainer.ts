@@ -171,6 +171,6 @@ export class TxExplainer {
             blockNumber: decodedTx.txReceipt.blockNumber,
             orderInfos,
         };
-        return output;
+        return output as any;
     }
 }

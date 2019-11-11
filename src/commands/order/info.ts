@@ -1,7 +1,7 @@
-import { BlockParamLiteral, ContractWrappers, Order } from '@0x/contract-wrappers';
+import { BlockParamLiteral, Order } from '@0x/contract-wrappers';
 import { Command, flags } from '@oclif/command';
 
-import { defaultFlags, renderFlags } from '../../global_flags';
+import { DEFAULT_READALE_FLAGS, DEFAULT_RENDER_FLAGS } from '../../global_flags';
 import { jsonPrinter } from '../../printers/json_printer';
 import { orderInfoPrinter } from '../../printers/order_info_printer';
 import { utils } from '../../utils';
@@ -12,22 +12,19 @@ export class OrderInfoCommand extends Command {
     public static examples = [`$ 0x-debug order:info --order-hash [ORDER_HASH]`];
 
     public static flags = {
-        help: flags.help({ char: 'h' }),
         order: flags.string({ char: 'o', description: 'The order in JSON format', required: true }),
         balances: flags.boolean({ description: 'Fetch the balances and allowances for the maker address' }),
         blockNumber: flags.integer({ description: 'The block number to fetch at' }),
-        'network-id': defaultFlags.networkId(),
-        json: renderFlags.json,
+        ...DEFAULT_RENDER_FLAGS,
+        ...DEFAULT_READALE_FLAGS,
     };
 
     // tslint:disable-next-line:async-suffix
     public async run(): Promise<void> {
         // tslint:disable-next-line:no-shadowed-variable
         const { flags } = this.parse(OrderInfoCommand);
-        const provider = utils.getProvider(flags);
-        const networkId = utils.getNetworkId(flags);
+        const { provider, contractWrappers } = utils.getReadableContext(flags);
         const rawOrder: Order = JSON.parse(flags.order);
-        const contractWrappers = utils.getContractWrappersForChainId(provider, networkId);
         let order = rawOrder;
         const blockNumber = flags.blockNumber || BlockParamLiteral.Latest;
         if (!rawOrder.exchangeAddress) {
@@ -51,6 +48,6 @@ export class OrderInfoCommand extends Command {
             balanceAndAllowance,
         };
         flags.json ? jsonPrinter.printConsole(output) : orderInfoPrinter.printConsole(output);
-        provider.stop();
+        utils.stopProvider(provider);
     }
 }

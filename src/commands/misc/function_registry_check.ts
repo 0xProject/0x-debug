@@ -10,7 +10,7 @@ import { AbiEncoder } from '@0x/utils';
 import { Command, flags } from '@oclif/command';
 import * as _ from 'lodash';
 
-import { defaultFlags, renderFlags } from '../../global_flags';
+import { DEFAULT_READALE_FLAGS, DEFAULT_RENDER_FLAGS } from '../../global_flags';
 import { PrintUtils } from '../../printers/print_utils';
 import { utils } from '../../utils';
 
@@ -42,10 +42,9 @@ export class FunctionRegistryCheck extends Command {
     public static examples = [`$ 0x-debug function_registration_check`];
 
     public static flags = {
-        help: flags.help({ char: 'h' }),
-        'network-id': defaultFlags.networkId(),
         list: flags.boolean(),
-        json: renderFlags.json,
+        ...DEFAULT_RENDER_FLAGS,
+        ...DEFAULT_READALE_FLAGS,
     };
     public static args = [];
     public static strict = false;
@@ -55,7 +54,7 @@ export class FunctionRegistryCheck extends Command {
         // tslint:disable-next-line:no-shadowed-variable
         const { flags, argv } = this.parse(FunctionRegistryCheck);
         // Registry only exists on Mainnet
-        const provider = utils.getProvider({ ...flags, 'network-id': 1 });
+        const { provider, web3Wrapper } = utils.getReadableContext({ ...flags, 'network-id': 1 });
         const entriesFunctionAi: MethodAbi = {
             constant: true,
             inputs: [{ name: 'selectors', type: 'bytes4[]' }],
@@ -67,7 +66,6 @@ export class FunctionRegistryCheck extends Command {
         };
         const entriesSignature = new AbiEncoder.Method(entriesFunctionAi);
 
-        const web3Wrapper = utils.getWeb3Wrapper(provider);
         const ABIS = [
             ...ExchangeContract.ABI(),
             ...ForwarderContract.ABI(),
@@ -125,6 +123,6 @@ export class FunctionRegistryCheck extends Command {
         } else {
             PrintUtils.printData('All good :)', []);
         }
-        provider.stop();
+        utils.stopProvider(provider);
     }
 }

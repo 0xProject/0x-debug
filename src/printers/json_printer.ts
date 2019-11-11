@@ -1,6 +1,7 @@
+import { cli } from 'cli-ux';
+
 export const jsonPrinter = {
     printConsole(output: any): void {
-        const prettyOutput = JSON.stringify(output, null, 2);
-        console.log(prettyOutput);
+        cli.styledJSON(output);
     },
 };
