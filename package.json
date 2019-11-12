@@ -24,6 +24,7 @@
         "lodash": "^4.17.11",
         "node-webcrypto-ossl": "^1.0.48",
         "tslib": "^1",
+        "walletconnect-node": "^0.0.1",
         "web3-provider-engine": "^15.0.0"
     },
     "devDependencies": {
