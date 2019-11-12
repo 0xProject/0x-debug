@@ -30,9 +30,9 @@ export class Stats extends Command {
     // tslint:disable-next-line:async-suffix
     public async run(): Promise<void> {
         const { flags, argv } = this.parse(Stats);
-        const { provider, networkId } = utils.getReadableContext(flags);
-        const addresses = getContractAddressesForChainOrThrow(networkId);
-        const stakingContract = new StakingContract(addresses.stakingProxy, provider, {});
+        const { provider, contractAddresses } = utils.getReadableContext(flags);
+        console.log(contractAddresses);
+        const stakingContract = new StakingContract(contractAddresses.stakingProxy, provider, {});
         const currentEpoch = await stakingContract.currentEpoch.callAsync();
         const globalDelegatedStake = await stakingContract.getGlobalStakeByStatus.callAsync(StakeStatus.Delegated);
         const epochStartTimeSeconds = await stakingContract.currentEpochStartTimeInSeconds.callAsync();

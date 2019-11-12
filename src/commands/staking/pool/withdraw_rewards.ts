@@ -1,7 +1,7 @@
 import { getContractAddressesForChainOrThrow, StakingContract } from '@0x/abi-gen-wrappers';
 import { Command, flags } from '@oclif/command';
 
-import { DEFAULT_READALE_FLAGS, DEFAULT_RENDER_FLAGS } from '../../../global_flags';
+import { DEFAULT_READALE_FLAGS, DEFAULT_RENDER_FLAGS, DEFAULT_WRITEABLE_FLAGS } from '../../../global_flags';
 import { basicReceiptPrinter } from '../../../printers/basic_receipt_printer';
 import { utils } from '../../../utils';
 
@@ -11,10 +11,10 @@ export class WithdrawRewards extends Command {
     public static examples = [`$ 0x-debug staking:pool:withdraw_rewards`];
 
     public static flags = {
-        'private-key': flags.string(),
         'pool-id': flags.string({ required: true }),
         ...DEFAULT_RENDER_FLAGS,
         ...DEFAULT_READALE_FLAGS,
+        ...DEFAULT_WRITEABLE_FLAGS,
     };
     public static args = [];
     public static strict = false;

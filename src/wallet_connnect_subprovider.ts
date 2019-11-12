@@ -46,10 +46,11 @@ export class WalletConnectSubprovider extends Subprovider {
 
             case 'eth_sign':
             case 'personal_sign':
-                // const data = payload.method === 'eth_sign' ? payload.params[1] : payload.params[0];
-                // address = payload.method === 'eth_sign' ? payload.params[0] : payload.params[1];
                 try {
-                    const result = await this._walletConnect.signPersonalMessage(payload.params);
+                    const data = payload.method === 'eth_sign' ? payload.params[1] : payload.params[0];
+                    const address = payload.method === 'eth_sign' ? payload.params[0] : payload.params[1];
+                    console.log(payload);
+                    const result = await this._walletConnect.signPersonalMessage([data, address]);
                     end(null, result);
                 } catch (err) {
                     end(err);

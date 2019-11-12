@@ -1,4 +1,10 @@
-import { ContractWrappers, DecodedLogArgs, LogWithDecodedArgs, OrderInfo } from '@0x/contract-wrappers';
+import {
+    ContractAddresses,
+    ContractWrappers,
+    DecodedLogArgs,
+    LogWithDecodedArgs,
+    OrderInfo,
+} from '@0x/contract-wrappers';
 import { Order } from '@0x/types';
 import { Web3Wrapper } from '@0x/web3-wrapper';
 import { TransactionReceiptStatus } from 'ethereum-types';
@@ -45,6 +51,7 @@ export enum WriteableProviderType {
     PrivateKey = 'PRIVATE_KEY',
     Mnemonic = 'MNEMONIC',
     WalletConnect = 'WALLET_CONNECT',
+    EthereumNode = 'ETHEREUM_NODE',
 }
 export interface ReadableContext {
     provider: any;
@@ -52,6 +59,7 @@ export interface ReadableContext {
     contractWrappers: ContractWrappers;
     networkId: number;
     chainId: number;
+    contractAddresses: ContractAddresses;
 }
 
 export interface WriteableContext extends ReadableContext {

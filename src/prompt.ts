@@ -5,6 +5,31 @@ import inquirer = require('inquirer');
 import { WriteableProviderType } from './types';
 
 export const prompt = {
+    async promptForInputAsync(message: string): Promise<{ input: string }> {
+        const result = await inquirer.prompt([
+            {
+                type: 'input',
+                name: 'input',
+                message,
+            },
+        ]);
+        return result;
+    },
+    async promptForEthereumNodeRPCUrlAsync(): Promise<{ rpcUrl: string; address: string }> {
+        const result = await inquirer.prompt([
+            {
+                type: 'input',
+                name: 'rpcUrl',
+                message: 'Input the Ethereum Node RPC URL',
+            },
+            {
+                type: 'input',
+                name: 'address',
+                message: 'Input the Ethereum Address',
+            },
+        ]);
+        return result;
+    },
     async promptForMnemonicDetailsAsync(): Promise<{ mnemonic: string; baseDerivationPath: string }> {
         const result = await inquirer.prompt([
             {
@@ -51,6 +76,11 @@ export const prompt = {
                     key: 'm',
                     name: 'Mnemonic',
                     value: WriteableProviderType.Mnemonic,
+                },
+                {
+                    key: 'e',
+                    name: 'Ethereum Node',
+                    value: WriteableProviderType.EthereumNode,
                 },
             ],
         });
