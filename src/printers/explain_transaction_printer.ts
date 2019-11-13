@@ -5,9 +5,10 @@ import { ExplainedTransactionOutput } from '../types';
 import { utils } from '../utils';
 
 import { PrintUtils } from './print_utils';
+import { Web3ProviderEngine } from '@0x/subproviders';
 
 export const explainTransactionPrinter = {
-    printConsole(output: ExplainedTransactionOutput, provider: Provider, networkId: number): void {
+    printConsole(output: ExplainedTransactionOutput, provider: Web3ProviderEngine, networkId: number): void {
         const contractWrappers = utils.getContractWrappersForChainId(provider, networkId);
         const web3Wrapper = utils.getWeb3Wrapper(provider);
 
