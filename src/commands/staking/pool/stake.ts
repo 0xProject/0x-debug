@@ -84,7 +84,7 @@ export class Stake extends Command {
             await utils.awaitTransactionWithSpinnerAsync('Setting ZRX Allowance', () =>
                 erc20Token.approve.awaitTransactionSuccessAsync(
                     contractAddresses.erc20Proxy,
-                    new BigNumber(10).pow(256).minus(1),
+                    new BigNumber(2).pow(256).minus(1),
                     { from: selectedAddress },
                 ),
             );
