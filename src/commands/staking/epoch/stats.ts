@@ -1,18 +1,12 @@
 import { StakingContract } from '@0x/abi-gen-wrappers';
-import { Web3Wrapper } from '@0x/web3-wrapper';
 import { Command } from '@oclif/command';
 import { cli } from 'cli-ux';
+import { constants } from '../../../constants';
 import { DEFAULT_READALE_FLAGS, DEFAULT_RENDER_FLAGS } from '../../../global_flags';
 import { jsonPrinter } from '../../../printers/json_printer';
 import { PrintUtils } from '../../../printers/print_utils';
+import { StakeStatus } from '../../../types';
 import { utils } from '../../../utils';
-
-enum StakeStatus {
-    Undelegated,
-    Delegated,
-}
-
-const MS_IN_SECONDS = 1000;
 
 export class Stats extends Command {
     public static description = 'Details for the current Staking Epoch';
@@ -43,7 +37,7 @@ export class Stats extends Command {
             totalWeightedStake,
             totalRewardsFinalized,
         ] = await stakingContract.aggregatedStatsByEpoch.callAsync(currentEpoch);
-        const epochEnded = epochEndTimeSeconds.isLessThan(Date.now() / MS_IN_SECONDS);
+        const epochEnded = epochEndTimeSeconds.isLessThan(Date.now() / constants.MS_IN_SECONDS);
         const output = {
             currentEpoch,
             epochStartTimeSeconds,
@@ -65,17 +59,27 @@ export class Stats extends Command {
             : cli.table(
                   [
                       { name: 'id', value: output.currentEpoch },
-                      { name: 'starts', value: new Date(output.epochStartTimeSeconds.times(MS_IN_SECONDS).toNumber()) },
-                      { name: 'ends', value: new Date(output.epochEndTimeSeconds.times(MS_IN_SECONDS).toNumber()) },
+                      {
+                          name: 'starts',
+                          value: new Date(output.epochStartTimeSeconds.times(constants.MS_IN_SECONDS).toNumber()),
+                      },
+                      {
+                          name: 'ends',
+                          value: new Date(output.epochEndTimeSeconds.times(constants.MS_IN_SECONDS).toNumber()),
+                      },
                       { name: 'ended', value: output.epochEnded },
                       { name: 'duration', value: output.epochDurationInSeconds },
                       {
                           name: 'rewards available',
-                          value: Web3Wrapper.toUnitAmount(output.epochStats.rewardsAvailable, 18).toFixed(6),
+                          value: utils
+                              .convertToUnits(output.epochStats.rewardsAvailable)
+                              .toFixed(constants.DISPLAY_DECIMALS),
                       },
                       {
                           name: 'fees collected',
-                          value: Web3Wrapper.toUnitAmount(output.epochStats.totalFeesCollected, 18).toFixed(6),
+                          value: utils
+                              .convertToUnits(output.epochStats.totalFeesCollected)
+                              .toFixed(constants.DISPLAY_DECIMALS),
                       },
                       { name: 'pools to finalize', value: output.epochStats.numPoolsToFinalize },
                   ],

@@ -8,6 +8,7 @@ import {
 import { Order } from '@0x/types';
 import { Web3Wrapper } from '@0x/web3-wrapper';
 import { TransactionReceiptStatus } from 'ethereum-types';
+import { Web3ProviderEngine } from '@0x/subproviders';
 
 export interface NetworkSpecificConfigs {
     rpcUrl: string;
@@ -54,7 +55,7 @@ export enum WriteableProviderType {
     EthereumNode = 'ETHEREUM_NODE',
 }
 export interface ReadableContext {
-    provider: any;
+    provider: Web3ProviderEngine;
     web3Wrapper: Web3Wrapper;
     contractWrappers: ContractWrappers;
     networkId: number;
@@ -79,4 +80,24 @@ export enum Networks {
 export enum StakeStatus {
     Undelegated,
     Delegated,
+}
+
+export const ProfileKeys = [
+    'network-id',
+    'private-key',
+    'rpc-url',
+    'address',
+    'mnemonic',
+    'base-derivation-path',
+    'walletconnect',
+];
+
+export interface Profile {
+    'network-id': number | undefined;
+    'private-key': string | undefined;
+    'rpc-url': string | undefined;
+    address: string | undefined;
+    mnemonic: string | undefined;
+    'base-derivation-path': string | undefined;
+    walletconnect: boolean | undefined;
 }

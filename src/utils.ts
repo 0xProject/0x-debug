@@ -13,7 +13,12 @@ import {
 import { PromiseWithTransactionHash } from '@0x/base-contract';
 import { ContractWrappers, EventAbi, FallbackAbi, MethodAbi, RevertErrorAbi } from '@0x/contract-wrappers';
 import { assetDataUtils } from '@0x/order-utils';
-import { MnemonicWalletSubprovider, PrivateKeyWalletSubprovider } from '@0x/subproviders';
+import {
+    MnemonicWalletSubprovider,
+    PrivateKeyWalletSubprovider,
+    RPCSubprovider,
+    Web3ProviderEngine,
+} from '@0x/subproviders';
 import { ERC20AssetData, Order, SignedOrder } from '@0x/types';
 import { providerUtils, BigNumber } from '@0x/utils';
 import { TransactionReceiptWithDecodedLogs, Web3Wrapper } from '@0x/web3-wrapper';
@@ -22,15 +27,13 @@ import _ = require('lodash');
 import { printTextAsQR, WalletConnect } from 'walletconnect-node';
 
 import { prompt } from './prompt';
-import { Networks, ReadableContext, WriteableContext, WriteableProviderType } from './types';
+import { Networks, ReadableContext, WriteableContext, WriteableProviderType, Profile, ProfileKeys } from './types';
 import { WalletConnectSubprovider } from './wallet_connnect_subprovider';
 import { constants } from './constants';
+import { config } from './config';
 const ora = require('ora');
 // HACK prevent ethers from printing 'Multiple definitions for'
 ethers.errors.setLogLevel('error');
-// tslint:disable:no-implicit-dependencies no-var-requires
-const Web3ProviderEngine = require('web3-provider-engine');
-const RpcSubprovider = require('web3-provider-engine/subproviders/rpc.js');
 
 const NETWORK_ID_TO_RPC_URL: { [key in Networks]: string } = {
     [Networks.Mainnet]: 'https://mainnet.0x.org',
@@ -99,14 +102,14 @@ export const utils = {
             return getContractAddressesForChainOrThrow(chainId);
         }
     },
-    getWeb3Wrapper(provider: any): Web3Wrapper {
+    getWeb3Wrapper(provider: Web3ProviderEngine): Web3Wrapper {
         if (!web3Wrapper) {
             web3Wrapper = new Web3Wrapper(provider);
             utils.loadABIs(web3Wrapper);
         }
         return web3Wrapper;
     },
-    getContractWrappersForChainId(provider: any, chainId: number): ContractWrappers {
+    getContractWrappersForChainId(provider: Web3ProviderEngine, chainId: number): ContractWrappers {
         if (!contractWrappers) {
             contractWrappers = new ContractWrappers(provider, { chainId });
         }
@@ -137,15 +140,16 @@ export const utils = {
         abiDecoder.addABI(utils.knownABIs(), '0x');
         abiDecoder.addABI([revertWithReasonABI], 'Revert');
     },
-    getRpcSubprovider(flags: any): any {
-        const networkId = utils.getNetworkId(flags);
-        const rpcSubprovider = new RpcSubprovider({ rpcUrl: utils.getNetworkRPCOrThrow(networkId) });
+    getRpcSubprovider(profile: Profile): any {
+        const rpcUrl = profile['rpc-url'] ? profile['rpc-url'] : utils.getNetworkRPCOrThrow(profile['network-id'] || 1);
+        const rpcSubprovider = new RPCSubprovider(rpcUrl);
         return rpcSubprovider;
     },
     getReadableContext(flags: any): ReadableContext {
-        const networkId = utils.getNetworkId(flags);
         const provider = new Web3ProviderEngine();
-        provider.addProvider(utils.getRpcSubprovider(flags));
+        const profile = utils.mergeFlagsAndProfile(flags);
+        const networkId = profile['network-id'] as number;
+        provider.addProvider(utils.getRpcSubprovider(profile));
         providerUtils.startProviderEngine(provider);
         web3Wrapper = new Web3Wrapper(provider);
         const contractAddresses = utils.getContractAddressesForChainOrThrow(networkId);
@@ -163,59 +167,99 @@ export const utils = {
         };
         return context;
     },
-    async getWriteableContextAsync(flags: any): Promise<WriteableContext> {
-        const privKeyFlag = flags['private-key'];
-        const mnemonicFlag = flags.mnemonic;
+    mergeFlagsAndProfile(flags: any): Profile {
+        let profile: Profile;
+        if (flags.profile) {
+            profile = (config.get(`profiles.${flags.profile}`) as Profile) || {};
+        } else {
+            profile = (config.get(`profiles.default`) as Profile) || {};
+        }
+        ProfileKeys.map(k => {
+            if (flags[k]) {
+                profile = { ...profile, [k]: flags[k] };
+            }
+        });
+        return profile;
+    },
+    async getWritableProviderAsync(): Promise<{
+        provider: WalletConnectSubprovider | MnemonicWalletSubprovider | PrivateKeyWalletSubprovider | RPCSubprovider;
+        providerType: WriteableProviderType;
+        'private-key': string | undefined;
+        mnemonic: string | undefined;
+        'base-derivation-path': string | undefined;
+        'rpc-url': string | undefined;
+        address: string | undefined;
+    }> {
         let writeableProvider;
-        let selectedAddress: string | undefined;
+        let walletDetails: any;
+        const providerType = (await prompt.selectWriteableProviderAsync()).providerType;
+        switch (providerType) {
+            case WriteableProviderType.WalletConnect:
+                writeableProvider = await utils.getWalletConnectProviderAsync();
+                break;
+            case WriteableProviderType.PrivateKey:
+                const { privateKey } = await prompt.promptForPrivateKeyAsync();
+                walletDetails = { 'private-key': privateKey };
+                writeableProvider = new PrivateKeyWalletSubprovider(privateKey);
+                break;
+            case WriteableProviderType.Mnemonic:
+                const { baseDerivationPath, mnemonic } = await prompt.promptForMnemonicDetailsAsync();
+                walletDetails = { 'base-derivation-path': baseDerivationPath, mnemonic };
+                writeableProvider = new MnemonicWalletSubprovider({
+                    mnemonic,
+                    baseDerivationPath,
+                });
+                break;
+            case WriteableProviderType.EthereumNode:
+                const { rpcUrl, address } = await prompt.promptForEthereumNodeRPCUrlAsync();
+                walletDetails = { 'rpc-url': address };
+                writeableProvider = new RPCSubprovider(rpcUrl);
+                break;
+            default:
+                throw new Error('Provider is currently unsupported');
+        }
+        return {
+            provider: writeableProvider,
+            providerType,
+            ...walletDetails,
+        };
+    },
+    async getWriteableContextAsync(flags: any): Promise<WriteableContext> {
+        const profile = utils.mergeFlagsAndProfile(flags);
+        let writeableProvider;
         let providerType: WriteableProviderType | undefined;
-        if (privKeyFlag) {
-            writeableProvider = new PrivateKeyWalletSubprovider(privKeyFlag);
+        if (profile['private-key']) {
+            writeableProvider = new PrivateKeyWalletSubprovider(profile['private-key']);
             providerType = WriteableProviderType.PrivateKey;
         }
-        if (mnemonicFlag) {
-            writeableProvider = new MnemonicWalletSubprovider({ mnemonic: mnemonicFlag });
+        if (profile.mnemonic) {
+            writeableProvider = new MnemonicWalletSubprovider({
+                mnemonic: profile.mnemonic,
+                baseDerivationPath: profile['base-derivation-path'],
+            });
             providerType = WriteableProviderType.Mnemonic;
         }
+        let selectedAddress = profile.address;
         if (!writeableProvider) {
-            providerType = (await prompt.selectWriteableProviderAsync()).providerType;
-            switch (providerType) {
-                case WriteableProviderType.WalletConnect:
-                    writeableProvider = await utils.getWalletConnectProviderAsync();
-                    break;
-                case WriteableProviderType.PrivateKey:
-                    const { privateKey } = await prompt.promptForPrivateKeyAsync();
-                    writeableProvider = new PrivateKeyWalletSubprovider(privateKey);
-                    break;
-                case WriteableProviderType.Mnemonic:
-                    const { baseDerivationPath, mnemonic } = await prompt.promptForMnemonicDetailsAsync();
-                    writeableProvider = new MnemonicWalletSubprovider({
-                        mnemonic,
-                        baseDerivationPath,
-                    });
-                    break;
-                case WriteableProviderType.EthereumNode:
-                    const { rpcUrl, address } = await prompt.promptForEthereumNodeRPCUrlAsync();
-                    writeableProvider = new RpcSubprovider({ rpcUrl });
-                    selectedAddress = address;
-                    break;
-                default:
-                    throw new Error('Provider is currently unsupported');
-            }
+            const result = await utils.getWritableProviderAsync();
+            writeableProvider = result.provider;
+            selectedAddress = result.address;
+            providerType = result.providerType;
         }
         if (providerType === undefined) {
             throw new Error('Unable to determine providerType');
         }
-        const networkId = utils.getNetworkId(flags);
+        const networkId = profile['network-id'] as number;
         const provider = new Web3ProviderEngine();
         provider.addProvider(writeableProvider);
-        provider.addProvider(utils.getRpcSubprovider(flags));
+        provider.addProvider(utils.getRpcSubprovider(profile));
         providerUtils.startProviderEngine(provider);
         web3Wrapper = new Web3Wrapper(provider);
         const contractAddresses = utils.getContractAddressesForChainOrThrow(networkId);
         contractWrappers = new ContractWrappers(provider, { chainId: networkId, contractAddresses });
         const accounts = await web3Wrapper.getAvailableAddressesAsync();
-        if (!selectedAddress) {
+        const selectedAddressExists = selectedAddress && accounts.find(a => selectedAddress === a);
+        if (!selectedAddress || !selectedAddressExists) {
             selectedAddress =
                 accounts.length > 1
                     ? (await prompt.selectAddressAsync(accounts, contractWrappers.devUtils)).selectedAddress
@@ -232,7 +276,7 @@ export const utils = {
             contractAddresses,
         };
     },
-    stopProvider(provider: any): void {
+    stopProvider(provider: Web3ProviderEngine): void {
         provider.stop();
         if (walletConnector) {
             void walletConnector.killSession();
