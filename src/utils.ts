@@ -172,7 +172,8 @@ export const utils = {
         if (flags.profile) {
             profile = (config.get(`profiles.${flags.profile}`) as Profile) || {};
         } else {
-            profile = (config.get(`profiles.default`) as Profile) || {};
+            profile = config.get(`profiles.${config.get('profile')}`) as Profile;
+            profile = profile || (config.get(`profiles.default`) as Profile) || {};
         }
         ProfileKeys.map(k => {
             if (flags[k]) {
