@@ -1,19 +1,13 @@
-import { getContractAddressesForChainOrThrow, StakingContract } from '@0x/abi-gen-wrappers';
+import { StakingContract } from '@0x/abi-gen-wrappers';
+import { BigNumber } from '@0x/utils';
 import { Command, flags } from '@oclif/command';
-
+import { cli } from 'cli-ux';
+import { constants } from '../../../constants';
 import { DEFAULT_READALE_FLAGS, DEFAULT_RENDER_FLAGS, DEFAULT_WRITEABLE_FLAGS } from '../../../global_flags';
 import { basicReceiptPrinter } from '../../../printers/basic_receipt_printer';
-import { utils } from '../../../utils';
 import { prompt } from '../../../prompt';
-import { BigNumber } from '@0x/utils';
-import { cli } from 'cli-ux';
-import { Web3Wrapper } from '@0x/web3-wrapper';
-
-enum StakeStatus {
-    Undelegated,
-    Delegated,
-}
-const NIL_POOL_ID = '0x0000000000000000000000000000000000000000000000000000000000000000';
+import { utils } from '../../../utils';
+import { StakeStatus } from '../../../types';
 
 export class Unstake extends Command {
     public static description = 'Unstakes a Staking Pool';
@@ -36,20 +30,20 @@ export class Unstake extends Command {
         const stakingContract = new StakingContract(contractAddresses.stakingProxy, provider, {});
         const poolId = flags['pool-id'];
         const stakingPoolInfo = await stakingContract.getStakeDelegatedToPoolByOwner.callAsync(selectedAddress, poolId);
-        const convertToUnits = (b: BigNumber): BigNumber => Web3Wrapper.toUnitAmount(b, 18);
-        const convertToBaseUnits = (b: BigNumber): BigNumber => Web3Wrapper.toBaseUnitAmount(b, 18);
         const stakingPoolInfoUnits = {
             ...stakingPoolInfo,
-            currentEpochBalance: convertToUnits(stakingPoolInfo.currentEpochBalance),
-            nextEpochBalance: convertToUnits(stakingPoolInfo.nextEpochBalance),
+            currentEpochBalance: utils.convertToUnits(stakingPoolInfo.currentEpochBalance),
+            nextEpochBalance: utils.convertToUnits(stakingPoolInfo.nextEpochBalance),
         };
         cli.styledJSON(stakingPoolInfoUnits);
         const { input } = await prompt.promptForInputAsync('Input new Stake Amount (in ZRX)');
-        const stakeDiffAmount = convertToBaseUnits(stakingPoolInfoUnits.nextEpochBalance.minus(new BigNumber(input)));
+        const stakeDiffAmount = utils.convertToBaseUnits(
+            stakingPoolInfoUnits.nextEpochBalance.minus(new BigNumber(input)),
+        );
         const result = await utils.awaitTransactionWithSpinnerAsync('Unstaking', () =>
             stakingContract.moveStake.awaitTransactionSuccessAsync(
                 { status: StakeStatus.Delegated, poolId },
-                { status: StakeStatus.Undelegated, poolId: NIL_POOL_ID },
+                constants.UNDELEGATED_POOL,
                 stakeDiffAmount,
                 { from: selectedAddress },
             ),

@@ -1,8 +1,7 @@
-import { getContractAddressesForChainOrThrow, StakingContract } from '@0x/abi-gen-wrappers';
+import { StakingContract } from '@0x/abi-gen-wrappers';
 import { Web3Wrapper } from '@0x/web3-wrapper';
-import { Command, flags } from '@oclif/command';
+import { Command } from '@oclif/command';
 import { cli } from 'cli-ux';
-
 import { DEFAULT_READALE_FLAGS, DEFAULT_RENDER_FLAGS } from '../../../global_flags';
 import { jsonPrinter } from '../../../printers/json_printer';
 import { PrintUtils } from '../../../printers/print_utils';
@@ -31,7 +30,6 @@ export class Stats extends Command {
     public async run(): Promise<void> {
         const { flags, argv } = this.parse(Stats);
         const { provider, contractAddresses } = utils.getReadableContext(flags);
-        console.log(contractAddresses);
         const stakingContract = new StakingContract(contractAddresses.stakingProxy, provider, {});
         const currentEpoch = await stakingContract.currentEpoch.callAsync();
         const globalDelegatedStake = await stakingContract.getGlobalStakeByStatus.callAsync(StakeStatus.Delegated);

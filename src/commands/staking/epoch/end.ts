@@ -1,4 +1,4 @@
-import { getContractAddressesForChainOrThrow, StakingContract } from '@0x/abi-gen-wrappers';
+import { StakingContract } from '@0x/abi-gen-wrappers';
 import { Command } from '@oclif/command';
 
 import { DEFAULT_READALE_FLAGS, DEFAULT_RENDER_FLAGS, DEFAULT_WRITEABLE_FLAGS } from '../../../global_flags';
@@ -23,7 +23,6 @@ export class End extends Command {
         const { flags, argv } = this.parse(End);
         const { provider, selectedAddress, contractAddresses } = await utils.getWriteableContextAsync(flags);
         const stakingContract = new StakingContract(contractAddresses.stakingProxy, provider, {});
-        console.log('ending epoch');
         const result = await utils.awaitTransactionWithSpinnerAsync('End Epoch', () =>
             stakingContract.endEpoch.awaitTransactionSuccessAsync({
                 from: selectedAddress,

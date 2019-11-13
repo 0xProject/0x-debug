@@ -1,6 +1,5 @@
-import { getContractAddressesForChainOrThrow, StakingContract } from '@0x/abi-gen-wrappers';
+import { StakingContract } from '@0x/abi-gen-wrappers';
 import { Command, flags } from '@oclif/command';
-
 import { DEFAULT_READALE_FLAGS, DEFAULT_RENDER_FLAGS, DEFAULT_WRITEABLE_FLAGS } from '../../../global_flags';
 import { basicReceiptPrinter } from '../../../printers/basic_receipt_printer';
 import { utils } from '../../../utils';

@@ -75,3 +75,8 @@ export enum Networks {
     Kovan = 42,
     Ganache = 50,
 }
+
+export enum StakeStatus {
+    Undelegated,
+    Delegated,
+}

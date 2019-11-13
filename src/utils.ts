@@ -15,7 +15,7 @@ import { ContractWrappers, EventAbi, FallbackAbi, MethodAbi, RevertErrorAbi } fr
 import { assetDataUtils } from '@0x/order-utils';
 import { MnemonicWalletSubprovider, PrivateKeyWalletSubprovider } from '@0x/subproviders';
 import { ERC20AssetData, Order, SignedOrder } from '@0x/types';
-import { providerUtils } from '@0x/utils';
+import { providerUtils, BigNumber } from '@0x/utils';
 import { TransactionReceiptWithDecodedLogs, Web3Wrapper } from '@0x/web3-wrapper';
 import * as ethers from 'ethers';
 import _ = require('lodash');
@@ -24,6 +24,7 @@ import { printTextAsQR, WalletConnect } from 'walletconnect-node';
 import { prompt } from './prompt';
 import { Networks, ReadableContext, WriteableContext, WriteableProviderType } from './types';
 import { WalletConnectSubprovider } from './wallet_connnect_subprovider';
+import { constants } from './constants';
 const ora = require('ora');
 // HACK prevent ethers from printing 'Multiple definitions for'
 ethers.errors.setLogLevel('error');
@@ -66,6 +67,8 @@ let walletConnector: WalletConnect;
 let walletConnectSubprovider: WalletConnectSubprovider;
 
 export const utils = {
+    convertToUnits: (b: BigNumber): BigNumber => Web3Wrapper.toUnitAmount(b, constants.ETH_DECIMALS),
+    convertToBaseUnits: (b: BigNumber): BigNumber => Web3Wrapper.toBaseUnitAmount(b, constants.ETH_DECIMALS),
     getContractAddressesForChainOrThrow(chainId: number): ContractAddresses {
         // HACK(dekz) temporarily provide WIP mainnet addresses
         if (chainId === 1) {
@@ -321,6 +324,7 @@ export const utils = {
             result = await fnAsync();
         } catch (e) {
             spinner.fail(e.message);
+            console.log(JSON.stringify(e));
             throw e;
         }
         spinner.stop();
