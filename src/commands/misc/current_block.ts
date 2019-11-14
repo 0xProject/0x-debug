@@ -1,10 +1,7 @@
-import { ContractWrappers } from '@0x/contract-wrappers';
-import { BigNumber, providerUtils } from '@0x/utils';
-import { BlockParamLiteral, CallData, Web3Wrapper } from '@0x/web3-wrapper';
-import { Command, flags } from '@oclif/command';
+import { Command } from '@oclif/command';
+import { cli } from 'cli-ux';
 
-import { defaultFlags, renderFlags } from '../../global_flags';
-import { jsonPrinter } from '../../printers/json_printer';
+import { DEFAULT_READALE_FLAGS, DEFAULT_RENDER_FLAGS } from '../../global_flags';
 import { utils } from '../../utils';
 
 export class Call extends Command {
@@ -13,9 +10,8 @@ export class Call extends Command {
     public static examples = [`$ 0x-debug misc:current_block`];
 
     public static flags = {
-        help: flags.help({ char: 'h' }),
-        'network-id': defaultFlags.networkId(),
-        json: renderFlags.json,
+        ...DEFAULT_RENDER_FLAGS,
+        ...DEFAULT_READALE_FLAGS,
     };
 
     public static args = [{ name: 'address' }, { name: 'callData' }];
@@ -24,10 +20,9 @@ export class Call extends Command {
     public async run(): Promise<void> {
         // tslint:disable-next-line:no-shadowed-variable
         const { args, flags } = this.parse(Call);
-        const provider = utils.getProvider(flags);
-        const web3Wrapper = utils.getWeb3Wrapper(provider);
+        const { provider, web3Wrapper } = utils.getReadableContext(flags);
         const result = await web3Wrapper.getBlockNumberAsync();
         console.log(result);
-        provider.stop();
+        utils.stopProvider(provider);
     }
 }

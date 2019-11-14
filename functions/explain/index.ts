@@ -6,10 +6,10 @@ export const handle = async (event, _ctx, _cb): Promise<any> => {
     const txHash = event.queryStringParameters.tx;
     const flags = { 'network-id': networkId };
     console.log(event.queryStringParameters);
-    const provider = utils.getProvider(flags);
+    const { provider } = utils.getReadableContext(flags);
     const explainer = new TxExplainer(provider, networkId);
     const result = await explainer.explainTransactionAsync(txHash);
-    provider.stop();
+    utils.stopProvider(provider);
     const httpResponse = {
         isBase64Encoded: false,
         statusCode: 200,

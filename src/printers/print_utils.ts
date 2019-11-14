@@ -16,12 +16,8 @@ import {
     LogEntry,
     LogWithDecodedArgs,
     TransactionReceiptStatus,
-    TransactionReceiptWithDecodedLogs,
 } from 'ethereum-types';
 import * as _ from 'lodash';
-import ora = require('ora');
-
-import { utils } from '../utils';
 
 const DECIMALS = 18;
 const UNLIMITED_ALLOWANCE_IN_BASE_UNITS = new BigNumber(2).pow(256).minus(1);
@@ -235,22 +231,5 @@ export class PrintUtils {
         });
         PrintUtils.printHeader('Allowances');
         PrintUtils.pushAndPrint(table, flattenedAllowances);
-    }
-    public async awaitTransactionMinedSpinnerAsync(
-        message: string,
-        txHash: string,
-    ): Promise<TransactionReceiptWithDecodedLogs> {
-        const spinner = ora(`${message}: ${txHash}`).start();
-        if (!spinner.isSpinning) {
-            console.log(message, txHash);
-        }
-        try {
-            const receipt = await this._web3Wrapper.awaitTransactionMinedAsync(txHash);
-            receipt.status === 1 ? spinner.stop() : spinner.fail(message);
-            return receipt;
-        } catch (e) {
-            spinner.fail(message);
-            throw e;
-        }
     }
 }

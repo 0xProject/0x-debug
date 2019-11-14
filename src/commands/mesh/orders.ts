@@ -1,7 +1,7 @@
 import { WSClient } from '@0x/mesh-rpc-client';
 import { Command, flags } from '@oclif/command';
 
-import { renderFlags } from '../../global_flags';
+import { DEFAULT_READALE_FLAGS, DEFAULT_RENDER_FLAGS } from '../../global_flags';
 
 export class Orders extends Command {
     public static description = 'Retrieves the orders from a Mesh node';
@@ -9,9 +9,9 @@ export class Orders extends Command {
     public static examples = [`$ 0x-debug mesh:orders`];
 
     public static flags = {
-        help: flags.help({ char: 'h' }),
         'mesh-url': flags.string({ required: true }),
-        json: renderFlags.json,
+        ...DEFAULT_RENDER_FLAGS,
+        ...DEFAULT_READALE_FLAGS,
     };
     public static args = [];
     public static strict = false;

@@ -14,6 +14,7 @@ import {
 
 import { ExplainedTransactionOutput } from './types';
 import { utils } from './utils';
+import { Web3ProviderEngine } from '@0x/subproviders';
 
 interface ExplainedTransaction {
     success: boolean;
@@ -117,7 +118,7 @@ export const txExplainerUtils = {
 export class TxExplainer {
     private _web3Wrapper: Web3Wrapper;
     private _contractWrappers: ContractWrappers;
-    constructor(provider: Provider, networkId: number) {
+    constructor(provider: Web3ProviderEngine, networkId: number) {
         this._contractWrappers = utils.getContractWrappersForChainId(provider, networkId);
         this._web3Wrapper = utils.getWeb3Wrapper(provider);
     }
@@ -171,6 +172,6 @@ export class TxExplainer {
             blockNumber: decodedTx.txReceipt.blockNumber,
             orderInfos,
         };
-        return output;
+        return output as any;
     }
 }
