@@ -1,5 +1,6 @@
 // Decodes any 0x transaction
 import { ContractWrappers } from '@0x/contract-wrappers';
+import { Web3ProviderEngine } from '@0x/subproviders';
 import { Order, SignedOrder } from '@0x/types';
 import { AbiDecoder, BigNumber, DecodedCalldata, RevertError } from '@0x/utils';
 import { Web3Wrapper } from '@0x/web3-wrapper';
@@ -14,7 +15,6 @@ import {
 
 import { ExplainedTransactionOutput } from './types';
 import { utils } from './utils';
-import { Web3ProviderEngine } from '@0x/subproviders';
 
 interface ExplainedTransaction {
     success: boolean;
@@ -39,7 +39,9 @@ export const txExplainerUtils = {
         } catch (err) {
             throw new Error('TX_NOT_FOUND');
         }
-        const txReceipt = await web3Wrapper.getTransactionReceiptIfExistsAsync(txHash);
+        const txReceipt = await web3Wrapper.getTransactionReceiptIfExistsAsync(
+            txHash,
+        );
         if (!tx || !tx.blockNumber || !tx.input || !txReceipt) {
             throw new Error('TX_NOT_FOUND');
         }
@@ -61,10 +63,17 @@ export const txExplainerUtils = {
         const gasUsed = txReceipt.gasUsed;
         const isSuccess = txReceipt && txReceipt.status === 1;
         if (txReceipt && txReceipt.status === 1) {
-            decodedLogs = await txExplainerUtils.decodeLogsAsync(web3Wrapper, txReceipt);
+            decodedLogs = await txExplainerUtils.decodeLogsAsync(
+                web3Wrapper,
+                txReceipt,
+            );
         } else {
             // Make a call at that blockNumber to check for any revert reasons
-            revertReason = await txExplainerUtils.decodeRevertReasonAsync(web3Wrapper, callData, blockNumber);
+            revertReason = await txExplainerUtils.decodeRevertReasonAsync(
+                web3Wrapper,
+                callData,
+                blockNumber,
+            );
         }
         return {
             blockNumber,
@@ -119,11 +128,16 @@ export class TxExplainer {
     private _web3Wrapper: Web3Wrapper;
     private _contractWrappers: ContractWrappers;
     constructor(provider: Web3ProviderEngine, networkId: number) {
-        this._contractWrappers = utils.getContractWrappersForChainId(provider, networkId);
+        this._contractWrappers = utils.getContractWrappersForChainId(
+            provider,
+            networkId,
+        );
         this._web3Wrapper = utils.getWeb3Wrapper(provider);
     }
 
-    public async explainTransactionAsync(txHash: string): Promise<ExplainedTransactionOutput> {
+    public async explainTransactionAsync(
+        txHash: string,
+    ): Promise<ExplainedTransactionOutput> {
         if (txHash === undefined) {
             throw new Error('txHash must be defined');
         }
@@ -133,7 +147,10 @@ export class TxExplainer {
             this._web3Wrapper.abiDecoder,
         );
         const inputArguments = decodedTx.decodedInput.functionArguments;
-        const orders: Order[] = utils.extractOrders(inputArguments, decodedTx.txReceipt.to);
+        const orders: Order[] = utils.extractOrders(
+            inputArguments,
+            decodedTx.txReceipt.to,
+        );
         const { accounts, tokens } = utils.extractAccountsAndTokens(orders);
         const taker = decodedTx.txReceipt.from;
         const devUtils = this._contractWrappers.devUtils;
@@ -142,12 +159,12 @@ export class TxExplainer {
             orderStatus,
             fillableTakerAssetAmounts,
             isValidSignature,
-        ] = await devUtils.getOrderRelevantStates.callAsync(
-            orders as SignedOrder[],
-            orders.map(o => (o as SignedOrder).signature),
-            {},
-            decodedTx.blockNumber,
-        );
+        ] = await devUtils
+            .getOrderRelevantStates(
+                orders as SignedOrder[],
+                orders.map(o => (o as SignedOrder).signature),
+            )
+            .callAsync({}, decodedTx.blockNumber);
         const orderInfos = orderStatus.map((_o, i) => {
             return {
                 orderStatus: orderStatus[i],

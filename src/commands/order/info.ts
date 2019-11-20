@@ -1,7 +1,11 @@
-import { BlockParamLiteral, Order } from '@0x/contract-wrappers';
+import { BlockParamLiteral } from '@0x/contract-wrappers';
+import { Order } from '@0x/order-utils';
 import { Command, flags } from '@oclif/command';
 
-import { DEFAULT_READALE_FLAGS, DEFAULT_RENDER_FLAGS } from '../../global_flags';
+import {
+    DEFAULT_READALE_FLAGS,
+    DEFAULT_RENDER_FLAGS,
+} from '../../global_flags';
 import { jsonPrinter } from '../../printers/json_printer';
 import { orderInfoPrinter } from '../../printers/order_info_printer';
 import { utils } from '../../utils';
@@ -9,12 +13,23 @@ import { utils } from '../../utils';
 export class OrderInfoCommand extends Command {
     public static description = 'Order Info for the provided order';
 
-    public static examples = [`$ 0x-debug order:info --order-hash [ORDER_HASH]`];
+    public static examples = [
+        `$ 0x-debug order:info --order-hash [ORDER_HASH]`,
+    ];
 
     public static flags = {
-        order: flags.string({ char: 'o', description: 'The order in JSON format', required: true }),
-        balances: flags.boolean({ description: 'Fetch the balances and allowances for the maker address' }),
-        blockNumber: flags.integer({ description: 'The block number to fetch at' }),
+        order: flags.string({
+            char: 'o',
+            description: 'The order in JSON format',
+            required: true,
+        }),
+        balances: flags.boolean({
+            description:
+                'Fetch the balances and allowances for the maker address',
+        }),
+        blockNumber: flags.integer({
+            description: 'The block number to fetch at',
+        }),
         ...DEFAULT_RENDER_FLAGS,
         ...DEFAULT_READALE_FLAGS,
     };
@@ -33,21 +48,34 @@ export class OrderInfoCommand extends Command {
                 exchangeAddress: contractWrappers.exchange.address,
             };
         }
-        const orderInfo = await contractWrappers.exchange.getOrderInfo.callAsync(order, {}, blockNumber);
+        const [
+            orderInfo,
+            remainingFillableTakerAssetAmount,
+            isValidSignature,
+        ] = await contractWrappers.devUtils
+            .getOrderRelevantState(order, (order as any).signature || '0x')
+            .callAsync({}, blockNumber);
+        console.log(
+            orderInfo,
+            remainingFillableTakerAssetAmount,
+            isValidSignature,
+        );
         let balanceAndAllowance;
         if (flags.balances) {
-            balanceAndAllowance = await contractWrappers.devUtils.getBalanceAndAssetProxyAllowance.callAsync(
-                order.makerAddress,
-                order.makerAssetData,
-                {},
-                blockNumber,
-            );
+            balanceAndAllowance = await contractWrappers.devUtils
+                .getBalanceAndAssetProxyAllowance(
+                    order.makerAddress,
+                    order.makerAssetData,
+                )
+                .callAsync({}, blockNumber);
         }
         const output = {
             orderInfo,
             balanceAndAllowance,
         };
-        flags.json ? jsonPrinter.printConsole(output) : orderInfoPrinter.printConsole(output);
+        flags.json
+            ? jsonPrinter.printConsole(output)
+            : orderInfoPrinter.printConsole(output);
         utils.stopProvider(provider);
     }
 }

@@ -1,16 +1,24 @@
-import { StakingContract, ERC20TokenContract, StakingProxyContract } from '@0x/abi-gen-wrappers';
-import { Command, flags } from '@oclif/command';
-
-import { DEFAULT_READALE_FLAGS, DEFAULT_RENDER_FLAGS, DEFAULT_WRITEABLE_FLAGS } from '../../../global_flags';
-import { basicReceiptPrinter } from '../../../printers/basic_receipt_printer';
-import { utils } from '../../../utils';
-import { prompt } from '../../../prompt';
-import { BigNumber } from '@0x/utils';
-import { cli } from 'cli-ux';
-import { Web3Wrapper } from '@0x/web3-wrapper';
+import {
+    ERC20TokenContract,
+    StakingContract,
+    StakingProxyContract,
+} from '@0x/abi-gen-wrappers';
 import { assetDataUtils } from '@0x/order-utils';
+import { BigNumber } from '@0x/utils';
+import { Web3Wrapper } from '@0x/web3-wrapper';
+import { Command, flags } from '@oclif/command';
+import { cli } from 'cli-ux';
+
 import { constants } from '../../../constants';
+import {
+    DEFAULT_READALE_FLAGS,
+    DEFAULT_RENDER_FLAGS,
+    DEFAULT_WRITEABLE_FLAGS,
+} from '../../../global_flags';
+import { basicReceiptPrinter } from '../../../printers/basic_receipt_printer';
+import { prompt } from '../../../prompt';
 import { StakeStatus } from '../../../types';
+import { utils } from '../../../utils';
 
 export class Stake extends Command {
     public static description = 'Stakes a Staking Pool';
@@ -29,74 +37,134 @@ export class Stake extends Command {
     // tslint:disable-next-line:async-suffix
     public async run(): Promise<void> {
         const { flags, argv } = this.parse(Stake);
-        const { provider, selectedAddress, contractAddresses, contractWrappers } = await utils.getWriteableContextAsync(
-            flags,
-        );
-        const stakingContract = new StakingContract(contractAddresses.stakingProxy, provider, {});
-        const stakingProxyContract = new StakingProxyContract(contractAddresses.stakingProxy, provider, {});
-        const poolId = flags['pool-id'];
-        const undelegatedStakingPoolInfo = await stakingContract.getStakeDelegatedToPoolByOwner.callAsync(
+        const {
+            provider,
             selectedAddress,
-            constants.UNDELEGATED_POOL.poolId,
+            contractAddresses,
+            contractWrappers,
+        } = await utils.getWriteableContextAsync(flags);
+        const stakingContract = new StakingContract(
+            contractAddresses.stakingProxy,
+            provider,
+            {},
         );
-        const stakingPoolInfo = await stakingContract.getStakeDelegatedToPoolByOwner.callAsync(selectedAddress, poolId);
+        const stakingProxyContract = new StakingProxyContract(
+            contractAddresses.stakingProxy,
+            provider,
+            {},
+        );
+        const poolId = flags['pool-id'];
+        const undelegatedStakingPoolInfo = await stakingContract
+            .getStakeDelegatedToPoolByOwner(
+                selectedAddress,
+                constants.UNDELEGATED_POOL.poolId,
+            )
+            .callAsync();
+        const stakingPoolInfo = await stakingContract
+            .getStakeDelegatedToPoolByOwner(selectedAddress, poolId)
+            .callAsync();
         const convertToUnits = (b: BigNumber | string): BigNumber =>
             Web3Wrapper.toUnitAmount(new BigNumber(b), constants.ETH_DECIMALS);
         const convertToBaseUnits = (b: BigNumber | string): BigNumber =>
-            Web3Wrapper.toBaseUnitAmount(new BigNumber(b), constants.ETH_DECIMALS);
+            Web3Wrapper.toBaseUnitAmount(
+                new BigNumber(b),
+                constants.ETH_DECIMALS,
+            );
         const stakingPoolInfoUnits = {
             ...stakingPoolInfo,
-            currentEpochBalance: convertToUnits(stakingPoolInfo.currentEpochBalance),
+            currentEpochBalance: convertToUnits(
+                stakingPoolInfo.currentEpochBalance,
+            ),
             nextEpochBalance: convertToUnits(stakingPoolInfo.nextEpochBalance),
         };
         const undelegatedStakingPoolInfoUnits = {
             ...stakingPoolInfo,
-            currentEpochBalance: convertToUnits(undelegatedStakingPoolInfo.currentEpochBalance),
-            nextEpochBalance: convertToUnits(undelegatedStakingPoolInfo.nextEpochBalance),
+            currentEpochBalance: convertToUnits(
+                undelegatedStakingPoolInfo.currentEpochBalance,
+            ),
+            nextEpochBalance: convertToUnits(
+                undelegatedStakingPoolInfo.nextEpochBalance,
+            ),
         };
         this.log('Undelegated Stake');
         cli.styledJSON(undelegatedStakingPoolInfoUnits);
         this.log(`Delegated Stake ${poolId}`);
         cli.styledJSON(stakingPoolInfoUnits);
-        const needsToDepositStake = undelegatedStakingPoolInfoUnits.nextEpochBalance.eq(constants.ZERO);
+        const needsToDepositStake = undelegatedStakingPoolInfoUnits.nextEpochBalance.eq(
+            constants.ZERO,
+        );
         const [
             zrxBalanceUnits,
             zrxAllowanceUnits,
-        ] = (await contractWrappers.devUtils.getBalanceAndAssetProxyAllowance.callAsync(
-            selectedAddress,
-            assetDataUtils.encodeERC20AssetData(contractAddresses.zrxToken),
-        )).map(convertToUnits);
+        ] = await contractWrappers.devUtils
+            .getBalanceAndAssetProxyAllowance(
+                selectedAddress,
+                assetDataUtils.encodeERC20AssetData(contractAddresses.zrxToken),
+            )
+            .callAsync();
+        // const [
+        //     zrxBalanceUnits,
+        //     zrxAllowanceUnits,
+        // ] = (await contractWrappers.devUtils.getBalanceAndAssetProxyAllowance(selectedAddress, assetDataUtils.encodeERC20AssetData(contractAddresses.zrxToken),
+        // )).map(convertToUnits);
         const needsToSetAllowance = zrxAllowanceUnits.eq(constants.ZERO);
 
-        if (!zrxBalanceUnits.isGreaterThanOrEqualTo(constants.MIN_ZRX_UNIT_AMOUNT)) {
-            this.error(`Insufficient balance of ZRX: ${zrxAllowanceUnits.toFixed(constants.DISPLAY_DECIMALS)}`);
+        if (
+            !zrxBalanceUnits.isGreaterThanOrEqualTo(
+                constants.MIN_ZRX_UNIT_AMOUNT,
+            )
+        ) {
+            this.error(
+                `Insufficient balance of ZRX: ${zrxAllowanceUnits.toFixed(
+                    constants.DISPLAY_DECIMALS,
+                )}`,
+            );
         }
         const { input } = await prompt.promptForInputAsync(
-            `Input amount to stake [${zrxBalanceUnits.toFixed(constants.DISPLAY_DECIMALS)} ZRX]`,
+            `Input amount to stake [${zrxBalanceUnits.toFixed(
+                constants.DISPLAY_DECIMALS,
+            )} ZRX]`,
         );
         if (needsToDepositStake && needsToSetAllowance) {
-            const erc20Token = new ERC20TokenContract(contractAddresses.zrxToken, provider, { from: selectedAddress });
-            await utils.awaitTransactionWithSpinnerAsync('Setting ZRX Allowance', () =>
-                erc20Token.approve.awaitTransactionSuccessAsync(
-                    contractAddresses.erc20Proxy,
-                    constants.UNLIMITED_ALLOWANCE,
-                    { from: selectedAddress },
-                ),
+            const erc20Token = new ERC20TokenContract(
+                contractAddresses.zrxToken,
+                provider,
+                { from: selectedAddress },
+            );
+            await utils.awaitTransactionWithSpinnerAsync(
+                'Setting ZRX Allowance',
+                () =>
+                    erc20Token
+                        .approve(
+                            contractAddresses.erc20Proxy,
+                            constants.UNLIMITED_ALLOWANCE,
+                        )
+                        .awaitTransactionSuccessAsync({ from: selectedAddress }),
             );
         }
         const functionCalls: string[] = [];
         if (needsToDepositStake) {
-            functionCalls.push(stakingContract.stake.getABIEncodedTransactionData(convertToBaseUnits(input)));
+            functionCalls.push(
+                stakingContract
+                    .stake(convertToBaseUnits(input))
+                    .getABIEncodedTransactionData(),
+            );
         }
         functionCalls.push(
-            stakingContract.moveStake.getABIEncodedTransactionData(
-                constants.UNDELEGATED_POOL,
-                { status: StakeStatus.Delegated, poolId },
-                convertToBaseUnits(input),
-            ),
+            stakingContract
+                .moveStake(
+                    constants.UNDELEGATED_POOL,
+                    { status: StakeStatus.Delegated, poolId },
+                    convertToBaseUnits(input),
+                )
+                .getABIEncodedTransactionData(),
         );
-        const result = await utils.awaitTransactionWithSpinnerAsync(`Staking ${poolId}`, () =>
-            stakingProxyContract.batchExecute.awaitTransactionSuccessAsync(functionCalls, { from: selectedAddress }),
+        const result = await utils.awaitTransactionWithSpinnerAsync(
+            `Staking ${poolId}`,
+            () =>
+                stakingProxyContract
+                    .batchExecute(functionCalls)
+                    .awaitTransactionSuccessAsync({ from: selectedAddress }),
         );
         basicReceiptPrinter.printConsole(result);
         utils.stopProvider(provider);

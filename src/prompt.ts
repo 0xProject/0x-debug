@@ -2,6 +2,7 @@ import { DevUtilsContract } from '@0x/abi-gen-wrappers';
 import { Web3Wrapper } from '@0x/web3-wrapper';
 import inquirer = require('inquirer');
 
+import { constants } from './constants';
 import { WriteableProviderType } from './types';
 
 export const prompt = {
@@ -15,7 +16,10 @@ export const prompt = {
         ]);
         return result;
     },
-    async promptForEthereumNodeRPCUrlAsync(): Promise<{ rpcUrl: string; address: string }> {
+    async promptForEthereumNodeRPCUrlAsync(): Promise<{
+        rpcUrl: string;
+        address: string;
+    }> {
         const result = await inquirer.prompt([
             {
                 type: 'input',
@@ -30,7 +34,10 @@ export const prompt = {
         ]);
         return result;
     },
-    async promptForMnemonicDetailsAsync(): Promise<{ mnemonic: string; baseDerivationPath: string }> {
+    async promptForMnemonicDetailsAsync(): Promise<{
+        mnemonic: string;
+        baseDerivationPath: string;
+    }> {
         const result = await inquirer.prompt([
             {
                 type: 'input',
@@ -56,11 +63,14 @@ export const prompt = {
         ]);
         return result;
     },
-    async selectWriteableProviderAsync(): Promise<{ providerType: WriteableProviderType }> {
+    async selectWriteableProviderAsync(): Promise<{
+        providerType: WriteableProviderType;
+    }> {
         const result = await inquirer.prompt({
             type: 'list',
             name: 'providerType',
-            message: 'This operation requires an Ethereum Transaction. Please select from one of the providers:',
+            message:
+                'This operation requires an Ethereum Transaction. Please select from one of the providers:',
             choices: [
                 {
                     key: 'w',
@@ -86,15 +96,23 @@ export const prompt = {
         });
         return result;
     },
-    async selectAddressAsync(addresses: string[], devUtils: DevUtilsContract): Promise<{ selectedAddress: string }> {
-        const ethBalances = await devUtils.getEthBalances.callAsync(addresses);
+    async selectAddressAsync(
+        addresses: string[],
+        devUtils: DevUtilsContract,
+    ): Promise<{ selectedAddress: string }> {
+        const ethBalances = await devUtils
+            .getEthBalances(addresses)
+            .callAsync();
         const result = await inquirer.prompt({
             type: 'list',
             name: 'selectedAddress',
             message: 'Select the address to use',
             choices: addresses.map((a, i) => ({
                 key: a,
-                name: `${a} [${Web3Wrapper.toUnitAmount(ethBalances[i], 18).toFormat(4)} ETH]`,
+                name: `${a} [${Web3Wrapper.toUnitAmount(
+                    ethBalances[i],
+                    constants.ETH_DECIMALS,
+                ).toFormat(constants.DISPLAY_DECIMALS)} ETH]`,
                 value: a,
             })),
         });

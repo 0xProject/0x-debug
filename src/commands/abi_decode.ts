@@ -31,7 +31,11 @@ export class AbiDecode extends Command {
         if (flags.tx) {
             const web3Wrapper = utils.getWeb3Wrapper(provider);
             for (const arg of argv) {
-                const explainedTx = await txExplainerUtils.explainTransactionAsync(web3Wrapper, arg, abiDecoder);
+                const explainedTx = await txExplainerUtils.explainTransactionAsync(
+                    web3Wrapper,
+                    arg,
+                    abiDecoder,
+                );
                 outputs.push(explainedTx.decodedInput);
             }
         } else {
@@ -45,19 +49,23 @@ export class AbiDecode extends Command {
                         functionSignature: decodedCallData.selector,
                         functionArguments: [decodedCallData.toString()],
                     });
-                } catch {
+                } catch (e) {
+                    this.warn(`Unable to decode RevertError: ${e}`);
                     // do nothing
                 }
                 try {
                     decodedCallData = abiDecoder.decodeCalldataOrThrow(arg);
                     outputs.push(decodedCallData);
                 } catch (e) {
+                    this.warn(`Unable to decode CallData: ${e}`);
                     // do nothing
                 }
             }
         }
         for (const output of outputs) {
-            flags.json ? jsonPrinter.printConsole(output) : abiDecodePrinter.printConsole(output);
+            flags.json
+                ? jsonPrinter.printConsole(output)
+                : abiDecodePrinter.printConsole(output);
         }
         utils.stopProvider(provider);
     }

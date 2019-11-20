@@ -1,8 +1,12 @@
 import { StakingContract } from '@0x/abi-gen-wrappers';
 import { Command } from '@oclif/command';
 import { cli } from 'cli-ux';
+
 import { constants } from '../../../constants';
-import { DEFAULT_READALE_FLAGS, DEFAULT_RENDER_FLAGS } from '../../../global_flags';
+import {
+    DEFAULT_READALE_FLAGS,
+    DEFAULT_RENDER_FLAGS,
+} from '../../../global_flags';
 import { jsonPrinter } from '../../../printers/json_printer';
 import { PrintUtils } from '../../../printers/print_utils';
 import { StakeStatus } from '../../../types';
@@ -24,20 +28,36 @@ export class Stats extends Command {
     public async run(): Promise<void> {
         const { flags, argv } = this.parse(Stats);
         const { provider, contractAddresses } = utils.getReadableContext(flags);
-        const stakingContract = new StakingContract(contractAddresses.stakingProxy, provider, {});
-        const currentEpoch = await stakingContract.currentEpoch.callAsync();
-        const globalDelegatedStake = await stakingContract.getGlobalStakeByStatus.callAsync(StakeStatus.Delegated);
-        const epochStartTimeSeconds = await stakingContract.currentEpochStartTimeInSeconds.callAsync();
-        const epochDurationInSeconds = await stakingContract.epochDurationInSeconds.callAsync();
-        const epochEndTimeSeconds = epochStartTimeSeconds.plus(epochDurationInSeconds);
+        const stakingContract = new StakingContract(
+            contractAddresses.stakingProxy,
+            provider,
+            {},
+        );
+        const currentEpoch = await stakingContract.currentEpoch().callAsync();
+        const globalDelegatedStake = await stakingContract
+            .getGlobalStakeByStatus(StakeStatus.Delegated)
+            .callAsync();
+        const epochStartTimeSeconds = await stakingContract
+            .currentEpochStartTimeInSeconds()
+            .callAsync();
+        const epochDurationInSeconds = await stakingContract
+            .epochDurationInSeconds()
+            .callAsync();
+        const epochEndTimeSeconds = epochStartTimeSeconds.plus(
+            epochDurationInSeconds,
+        );
         const [
             rewardsAvailable,
             numPoolsToFinalize,
             totalFeesCollected,
             totalWeightedStake,
             totalRewardsFinalized,
-        ] = await stakingContract.aggregatedStatsByEpoch.callAsync(currentEpoch);
-        const epochEnded = epochEndTimeSeconds.isLessThan(Date.now() / constants.MS_IN_SECONDS);
+        ] = await stakingContract
+            .aggregatedStatsByEpoch(currentEpoch)
+            .callAsync();
+        const epochEnded = epochEndTimeSeconds.isLessThan(
+            Date.now() / constants.MS_IN_SECONDS,
+        );
         const output = {
             currentEpoch,
             epochStartTimeSeconds,
@@ -61,27 +81,45 @@ export class Stats extends Command {
                       { name: 'id', value: output.currentEpoch },
                       {
                           name: 'starts',
-                          value: new Date(output.epochStartTimeSeconds.times(constants.MS_IN_SECONDS).toNumber()),
+                          value: new Date(
+                              output.epochStartTimeSeconds
+                                  .times(constants.MS_IN_SECONDS)
+                                  .toNumber(),
+                          ),
                       },
                       {
                           name: 'ends',
-                          value: new Date(output.epochEndTimeSeconds.times(constants.MS_IN_SECONDS).toNumber()),
+                          value: new Date(
+                              output.epochEndTimeSeconds
+                                  .times(constants.MS_IN_SECONDS)
+                                  .toNumber(),
+                          ),
                       },
                       { name: 'ended', value: output.epochEnded },
-                      { name: 'duration', value: output.epochDurationInSeconds },
+                      {
+                          name: 'duration',
+                          value: output.epochDurationInSeconds,
+                      },
                       {
                           name: 'rewards available',
                           value: utils
-                              .convertToUnits(output.epochStats.rewardsAvailable)
+                              .convertToUnits(
+                                  output.epochStats.rewardsAvailable,
+                              )
                               .toFixed(constants.DISPLAY_DECIMALS),
                       },
                       {
                           name: 'fees collected',
                           value: utils
-                              .convertToUnits(output.epochStats.totalFeesCollected)
+                              .convertToUnits(
+                                  output.epochStats.totalFeesCollected,
+                              )
                               .toFixed(constants.DISPLAY_DECIMALS),
                       },
-                      { name: 'pools to finalize', value: output.epochStats.numPoolsToFinalize },
+                      {
+                          name: 'pools to finalize',
+                          value: output.epochStats.numPoolsToFinalize,
+                      },
                   ],
                   {
                       name: {

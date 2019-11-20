@@ -2,11 +2,10 @@
 import {
     ContractWrappers,
     ERC20TokenContract,
-    Order,
     OrderInfo,
     OrderStatus,
-    SignedOrder,
 } from '@0x/contract-wrappers';
+import { Order, SignedOrder } from '@0x/order-utils';
 import { BigNumber } from '@0x/utils';
 import { Web3Wrapper } from '@0x/web3-wrapper';
 import {
@@ -107,9 +106,13 @@ export class PrintUtils {
         }
         console.log(table.toString());
     }
-    public static printOrderInfos(orderInfos: { [orderName: string]: OrderInfo }): void {
+    public static printOrderInfos(orderInfos: {
+        [orderName: string]: OrderInfo;
+    }): void {
         const data: string[][] = [];
-        _.forOwn(orderInfos, (value, key) => data.push([key, OrderStatus[value.orderStatus], value.orderHash]));
+        _.forOwn(orderInfos, (value, key) =>
+            data.push([key, OrderStatus[value.orderStatus], value.orderHash]),
+        );
         PrintUtils.printData('Order Info', data);
     }
     public static printOrder(order: Order | SignedOrder): void {
@@ -132,18 +135,27 @@ export class PrintUtils {
             style: { ...defaultSchema.style, head: [headerColor] },
         });
         const status = txStatus === 1 ? 'Success' : 'Failure';
-        const tableData = [...data, ['gasUsed', gasUsed.toString()], ['status', status]];
+        const tableData = [
+            ...data,
+            ['gasUsed', gasUsed.toString()],
+            ['status', status],
+        ];
         PrintUtils.pushAndPrint(table, tableData);
 
         if (decodedLogs && decodedLogs.length > 0) {
             PrintUtils.printHeader('Logs');
             for (const log of decodedLogs) {
                 // tslint:disable:no-unnecessary-type-assertion
-                const eventName = (log as LogWithDecodedArgs<DecodedLogArgs>).event;
+                const eventName = (log as LogWithDecodedArgs<DecodedLogArgs>)
+                    .event;
                 if (eventName && eventNames.includes(eventName)) {
                     // tslint:disable:no-unnecessary-type-assertion
-                    const args = (log as LogWithDecodedArgs<DecodedLogArgs>).args;
-                    const logData = [['contract', log.address], ...Object.entries(args)];
+                    const args = (log as LogWithDecodedArgs<DecodedLogArgs>)
+                        .args;
+                    const logData = [
+                        ['contract', log.address],
+                        ...Object.entries(args),
+                    ];
                     PrintUtils.printData(`${eventName}`, logData as any);
                 }
             }
@@ -168,7 +180,9 @@ export class PrintUtils {
         });
         PrintUtils.printData('Accounts', data);
     }
-    public async fetchAndPrintContractBalancesAsync(blockNumber: BlockParam = BlockParamLiteral.Latest): Promise<void> {
+    public async fetchAndPrintContractBalancesAsync(
+        blockNumber: BlockParam = BlockParamLiteral.Latest,
+    ): Promise<void> {
         const flattenedBalances = [];
         const flattenedAccounts = Object.keys(this._accounts).map(
             account => account.charAt(0).toUpperCase() + account.slice(1),
@@ -178,9 +192,17 @@ export class PrintUtils {
             const tokenAddress = this._tokens[tokenSymbol];
             for (const account in this._accounts) {
                 const address = this._accounts[account];
-                const tokenContract = new ERC20TokenContract(tokenAddress, this._web3Wrapper.getProvider());
-                const balanceBaseUnits = await tokenContract.balanceOf.callAsync(address, {}, blockNumber);
-                const balance = Web3Wrapper.toUnitAmount(balanceBaseUnits, DECIMALS);
+                const tokenContract = new ERC20TokenContract(
+                    tokenAddress,
+                    this._web3Wrapper.getProvider(),
+                );
+                const balanceBaseUnits = await tokenContract
+                    .balanceOf(address)
+                    .callAsync({}, blockNumber);
+                const balance = Web3Wrapper.toUnitAmount(
+                    balanceBaseUnits,
+                    DECIMALS,
+                );
                 balances.push(balance.toString());
             }
             flattenedBalances.push(balances);
@@ -189,8 +211,13 @@ export class PrintUtils {
         // ETH
         for (const account in this._accounts) {
             const address = this._accounts[account];
-            const balanceBaseUnits = await this._web3Wrapper.getBalanceInWeiAsync(address);
-            const balance = Web3Wrapper.toUnitAmount(balanceBaseUnits, DECIMALS);
+            const balanceBaseUnits = await this._web3Wrapper.getBalanceInWeiAsync(
+                address,
+            );
+            const balance = Web3Wrapper.toUnitAmount(
+                balanceBaseUnits,
+                DECIMALS,
+            );
             ethBalances.push(balance.toString());
         }
         flattenedBalances.push(ethBalances);
@@ -204,7 +231,8 @@ export class PrintUtils {
     public async fetchAndPrintContractAllowancesAsync(
         blockNumber: BlockParam = BlockParamLiteral.Latest,
     ): Promise<void> {
-        const erc20ProxyAddress = this._contractWrappers.erc20Proxy.address;
+        const erc20ProxyAddress = this._contractWrappers.contractAddresses
+            .erc20Proxy;
         const flattenedAllowances = [];
         const flattenedAccounts = Object.keys(this._accounts).map(
             account => account.charAt(0).toUpperCase() + account.slice(1),
@@ -214,13 +242,13 @@ export class PrintUtils {
             const tokenAddress = this._tokens[tokenSymbol];
             for (const account in this._accounts) {
                 const address = this._accounts[account];
-                const tokenContract = new ERC20TokenContract(tokenAddress, this._web3Wrapper.getProvider());
-                const approvalBaseUnits = await tokenContract.allowance.callAsync(
-                    address,
-                    erc20ProxyAddress,
-                    {},
-                    blockNumber,
+                const tokenContract = new ERC20TokenContract(
+                    tokenAddress,
+                    this._web3Wrapper.getProvider(),
                 );
+                const approvalBaseUnits = await tokenContract
+                    .allowance(address, erc20ProxyAddress)
+                    .callAsync({}, blockNumber);
                 allowances.push(approvalBaseUnits.toString());
             }
             flattenedAllowances.push(allowances);
