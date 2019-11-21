@@ -11,7 +11,7 @@ import { utils } from '../utils';
 export class AbiDecode extends Command {
     public static description = 'Decodes ABI data for known ABI';
 
-    public static examples = [`$ 0x-debug abidecode [abi encoded data]`];
+    public static examples = [`$ 0x-debug abi_decode [abi encoded data]`];
 
     public static flags = {
         tx: flags.boolean({ required: false }),
@@ -39,7 +39,6 @@ export class AbiDecode extends Command {
                 outputs.push(explainedTx.decodedInput);
             }
         } else {
-            // HACK: (dekz) clean this up
             for (const arg of argv) {
                 let decodedCallData;
                 try {
@@ -50,14 +49,12 @@ export class AbiDecode extends Command {
                         functionArguments: [decodedCallData.toString()],
                     });
                 } catch (e) {
-                    this.warn(`Unable to decode RevertError: ${e}`);
                     // do nothing
                 }
                 try {
                     decodedCallData = abiDecoder.decodeCalldataOrThrow(arg);
                     outputs.push(decodedCallData);
                 } catch (e) {
-                    this.warn(`Unable to decode CallData: ${e}`);
                     // do nothing
                 }
             }

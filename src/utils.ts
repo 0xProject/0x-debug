@@ -30,6 +30,7 @@ import {
     TransactionReceiptWithDecodedLogs,
     Web3Wrapper,
 } from '@0x/web3-wrapper';
+// tslint:disable-next-line:no-implicit-dependencies
 import * as ethers from 'ethers';
 import _ = require('lodash');
 import { printTextAsQR, WalletConnect } from 'walletconnect-node';
@@ -46,6 +47,15 @@ import {
     WriteableProviderType,
 } from './types';
 import { WalletConnectSubprovider } from './wallet_connnect_subprovider';
+// HACK load and export for revert errors...
+// export so tsc doesn't remove on compilation
+export { CoordinatorRevertErrors } from '@0x/contracts-coordinator';
+export { ExchangeRevertErrors } from '@0x/contracts-exchange';
+export { ForwarderRevertErrors } from '@0x/contracts-exchange-forwarder';
+export { LibMathRevertErrors } from '@0x/contracts-exchange-libs';
+export { StakingRevertErrors } from '@0x/contracts-staking';
+
+// tslint:disable-next-line:no-var-requires
 const ora = require('ora');
 // HACK prevent ethers from printing 'Multiple definitions for'
 ethers.errors.setLogLevel('error');
