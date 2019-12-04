@@ -1,5 +1,11 @@
 // tslint:disable:forin
-import { ContractWrappers, Order, OrderInfo, OrderStatus, SignedOrder } from '@0x/contract-wrappers';
+import {
+    ContractWrappers,
+    ERC20TokenContract,
+    OrderInfo,
+    OrderStatus,
+} from '@0x/contract-wrappers';
+import { Order, SignedOrder } from '@0x/order-utils';
 import { BigNumber } from '@0x/utils';
 import { Web3Wrapper } from '@0x/web3-wrapper';
 import {
@@ -9,10 +15,8 @@ import {
     LogEntry,
     LogWithDecodedArgs,
     TransactionReceiptStatus,
-    TransactionReceiptWithDecodedLogs,
 } from 'ethereum-types';
 import * as _ from 'lodash';
-import ora = require('ora');
 
 const DECIMALS = 18;
 const UNLIMITED_ALLOWANCE_IN_BASE_UNITS = new BigNumber(2).pow(256).minus(1);
@@ -102,9 +106,13 @@ export class PrintUtils {
         }
         console.log(table.toString());
     }
-    public static printOrderInfos(orderInfos: { [orderName: string]: OrderInfo }): void {
+    public static printOrderInfos(orderInfos: {
+        [orderName: string]: OrderInfo;
+    }): void {
         const data: string[][] = [];
-        _.forOwn(orderInfos, (value, key) => data.push([key, OrderStatus[value.orderStatus], value.orderHash]));
+        _.forOwn(orderInfos, (value, key) =>
+            data.push([key, OrderStatus[value.orderStatus], value.orderHash]),
+        );
         PrintUtils.printData('Order Info', data);
     }
     public static printOrder(order: Order | SignedOrder): void {
@@ -127,18 +135,27 @@ export class PrintUtils {
             style: { ...defaultSchema.style, head: [headerColor] },
         });
         const status = txStatus === 1 ? 'Success' : 'Failure';
-        const tableData = [...data, ['gasUsed', gasUsed.toString()], ['status', status]];
+        const tableData = [
+            ...data,
+            ['gasUsed', gasUsed.toString()],
+            ['status', status],
+        ];
         PrintUtils.pushAndPrint(table, tableData);
 
         if (decodedLogs && decodedLogs.length > 0) {
             PrintUtils.printHeader('Logs');
             for (const log of decodedLogs) {
                 // tslint:disable:no-unnecessary-type-assertion
-                const eventName = (log as LogWithDecodedArgs<DecodedLogArgs>).event;
+                const eventName = (log as LogWithDecodedArgs<DecodedLogArgs>)
+                    .event;
                 if (eventName && eventNames.includes(eventName)) {
                     // tslint:disable:no-unnecessary-type-assertion
-                    const args = (log as LogWithDecodedArgs<DecodedLogArgs>).args;
-                    const logData = [['contract', log.address], ...Object.entries(args)];
+                    const args = (log as LogWithDecodedArgs<DecodedLogArgs>)
+                        .args;
+                    const logData = [
+                        ['contract', log.address],
+                        ...Object.entries(args),
+                    ];
                     PrintUtils.printData(`${eventName}`, logData as any);
                 }
             }
@@ -154,9 +171,6 @@ export class PrintUtils {
         this._web3Wrapper = web3Wrapper;
         this._accounts = accounts;
         this._tokens = tokens;
-        this._web3Wrapper.abiDecoder.addABI(contractWrappers.exchange.abi);
-        this._web3Wrapper.abiDecoder.addABI(contractWrappers.erc20Token.abi);
-        this._web3Wrapper.abiDecoder.addABI(contractWrappers.erc721Token.abi);
     }
     public printAccounts(): void {
         const data: string[][] = [];
@@ -166,7 +180,9 @@ export class PrintUtils {
         });
         PrintUtils.printData('Accounts', data);
     }
-    public async fetchAndPrintContractBalancesAsync(blockNumber: BlockParam = BlockParamLiteral.Latest): Promise<void> {
+    public async fetchAndPrintContractBalancesAsync(
+        blockNumber: BlockParam = BlockParamLiteral.Latest,
+    ): Promise<void> {
         const flattenedBalances = [];
         const flattenedAccounts = Object.keys(this._accounts).map(
             account => account.charAt(0).toUpperCase() + account.slice(1),
@@ -176,12 +192,17 @@ export class PrintUtils {
             const tokenAddress = this._tokens[tokenSymbol];
             for (const account in this._accounts) {
                 const address = this._accounts[account];
-                const balanceBaseUnits = await this._contractWrappers.erc20Token.getBalanceAsync(
+                const tokenContract = new ERC20TokenContract(
                     tokenAddress,
-                    address,
-                    { defaultBlock: blockNumber },
+                    this._web3Wrapper.getProvider(),
                 );
-                const balance = Web3Wrapper.toUnitAmount(balanceBaseUnits, DECIMALS);
+                const balanceBaseUnits = await tokenContract
+                    .balanceOf(address)
+                    .callAsync({}, blockNumber);
+                const balance = Web3Wrapper.toUnitAmount(
+                    balanceBaseUnits,
+                    DECIMALS,
+                );
                 balances.push(balance.toString());
             }
             flattenedBalances.push(balances);
@@ -190,8 +211,13 @@ export class PrintUtils {
         // ETH
         for (const account in this._accounts) {
             const address = this._accounts[account];
-            const balanceBaseUnits = await this._web3Wrapper.getBalanceInWeiAsync(address);
-            const balance = Web3Wrapper.toUnitAmount(balanceBaseUnits, DECIMALS);
+            const balanceBaseUnits = await this._web3Wrapper.getBalanceInWeiAsync(
+                address,
+            );
+            const balance = Web3Wrapper.toUnitAmount(
+                balanceBaseUnits,
+                DECIMALS,
+            );
             ethBalances.push(balance.toString());
         }
         flattenedBalances.push(ethBalances);
@@ -205,7 +231,8 @@ export class PrintUtils {
     public async fetchAndPrintContractAllowancesAsync(
         blockNumber: BlockParam = BlockParamLiteral.Latest,
     ): Promise<void> {
-        const erc20ProxyAddress = this._contractWrappers.erc20Proxy.address;
+        const erc20ProxyAddress = this._contractWrappers.contractAddresses
+            .erc20Proxy;
         const flattenedAllowances = [];
         const flattenedAccounts = Object.keys(this._accounts).map(
             account => account.charAt(0).toUpperCase() + account.slice(1),
@@ -215,13 +242,14 @@ export class PrintUtils {
             const tokenAddress = this._tokens[tokenSymbol];
             for (const account in this._accounts) {
                 const address = this._accounts[account];
-                const balance = await this._contractWrappers.erc20Token.getAllowanceAsync(
+                const tokenContract = new ERC20TokenContract(
                     tokenAddress,
-                    address,
-                    erc20ProxyAddress,
-                    { defaultBlock: blockNumber },
+                    this._web3Wrapper.getProvider(),
                 );
-                allowances.push(balance.toString());
+                const approvalBaseUnits = await tokenContract
+                    .allowance(address, erc20ProxyAddress)
+                    .callAsync({}, blockNumber);
+                allowances.push(approvalBaseUnits.toString());
             }
             flattenedAllowances.push(allowances);
         }
@@ -231,22 +259,5 @@ export class PrintUtils {
         });
         PrintUtils.printHeader('Allowances');
         PrintUtils.pushAndPrint(table, flattenedAllowances);
-    }
-    public async awaitTransactionMinedSpinnerAsync(
-        message: string,
-        txHash: string,
-    ): Promise<TransactionReceiptWithDecodedLogs> {
-        const spinner = ora(`${message}: ${txHash}`).start();
-        if (!spinner.isSpinning) {
-            console.log(message, txHash);
-        }
-        try {
-            const receipt = await this._web3Wrapper.awaitTransactionMinedAsync(txHash);
-            receipt.status === 1 ? spinner.stop() : spinner.fail(message);
-            return receipt;
-        } catch (e) {
-            spinner.fail(message);
-            throw e;
-        }
     }
 }

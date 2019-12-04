@@ -1,29 +1,65 @@
-import { AssetProxyOwner, Forwarder } from '@0x/contract-artifacts';
-import { ContractWrappers } from '@0x/contract-wrappers';
+import { PromiseWithTransactionHash } from '@0x/base-contract';
+import { getContractAddressesForChainOrThrow } from '@0x/contract-addresses';
+import {
+    ContractWrappers,
+    CoordinatorContract,
+    ERC20TokenContract,
+    ERC721TokenContract,
+    EventAbi,
+    ExchangeContract,
+    FallbackAbi,
+    ForwarderContract,
+    MethodAbi,
+    RevertErrorAbi,
+    StakingContract,
+} from '@0x/contract-wrappers';
 import { assetDataUtils } from '@0x/order-utils';
+import {
+    MnemonicWalletSubprovider,
+    PrivateKeyWalletSubprovider,
+    RPCSubprovider,
+    Web3ProviderEngine,
+} from '@0x/subproviders';
 import { ERC20AssetData, Order, SignedOrder } from '@0x/types';
-import { MethodAbi, Web3Wrapper } from '@0x/web3-wrapper';
+import { BigNumber, providerUtils } from '@0x/utils';
+import {
+    TransactionReceiptWithDecodedLogs,
+    Web3Wrapper,
+} from '@0x/web3-wrapper';
+// tslint:disable-next-line:no-implicit-dependencies
+import * as ethers from 'ethers';
 import _ = require('lodash');
-// tslint:disable:no-implicit-dependencies no-var-requires
-const Web3ProviderEngine = require('web3-provider-engine');
-const RpcSubprovider = require('web3-provider-engine/subproviders/rpc.js');
+import { printTextAsQR, WalletConnect } from 'walletconnect-node';
 
-enum Networks {
-    Mainnet = 1,
-    Rinkeby = 4,
-    Goerli = 5,
-    Ropsten = 3,
-    Kovan = 42,
-    Ganache = 50,
-}
+import { config } from './config';
+import { constants } from './constants';
+import { prompt } from './prompt';
+import {
+    Networks,
+    Profile,
+    ProfileKeys,
+    ReadableContext,
+    WriteableContext,
+    WriteableProviderType,
+} from './types';
+import { WalletConnectSubprovider } from './wallet_connnect_subprovider';
+
+// tslint:disable-next-line:no-var-requires
+const ora = require('ora');
+// HACK prevent ethers from printing 'Multiple definitions for'
+ethers.errors.setLogLevel('error');
 
 const NETWORK_ID_TO_RPC_URL: { [key in Networks]: string } = {
-    [Networks.Kovan]: 'https://kovan.infura.io/v3/d88014795f184ec4acc54d90bbf06dac',
-    [Networks.Mainnet]: 'https://mainnet.infura.io/v3/d88014795f184ec4acc54d90bbf06dac',
-    [Networks.Ropsten]: 'https://ropsten.infura.io/v3/d88014795f184ec4acc54d90bbf06dac',
-    [Networks.Rinkeby]: 'https://rinkeby.infura.io/v3/d88014795f184ec4acc54d90bbf06dac',
+    [Networks.Mainnet]: 'https://mainnet.0x.org',
+    [Networks.Kovan]:
+        'https://kovan.infura.io/v3/1e72108f28f046ae911df32c932c9bc6',
+    [Networks.Ropsten]:
+        'https://ropsten.infura.io/v3/1e72108f28f046ae911df32c932c9bc6',
+    [Networks.Rinkeby]:
+        'https://rinkeby.infura.io/v3/1e72108f28f046ae911df32c932c9bc6',
     [Networks.Goerli]: 'http://localhost:8545',
     [Networks.Ganache]: 'http://localhost:8545',
+    [Networks.GanacheChainId]: 'http://localhost:8545',
 };
 
 const revertWithReasonABI: MethodAbi = {
@@ -46,18 +82,31 @@ const revertWithReasonABI: MethodAbi = {
     type: 'function',
 };
 
+let contractWrappers: ContractWrappers;
+let web3Wrapper: Web3Wrapper;
+let walletConnector: WalletConnect;
+let walletConnectSubprovider: WalletConnectSubprovider;
+
 export const utils = {
-    loadABIs(web3Wrapper: Web3Wrapper, contractWrappers: ContractWrappers): void {
-        const abiDecoder = contractWrappers.getAbiDecoder();
-        web3Wrapper.abiDecoder.addABI(contractWrappers.exchange.abi);
-        web3Wrapper.abiDecoder.addABI(contractWrappers.erc20Token.abi);
-        web3Wrapper.abiDecoder.addABI(contractWrappers.erc721Token.abi);
-        abiDecoder.addABI([revertWithReasonABI], 'Revert');
-        web3Wrapper.abiDecoder.addABI([revertWithReasonABI], 'Revert');
-        abiDecoder.addABI((AssetProxyOwner as any).compilerOutput.abi, 'AssetProxyOwner');
-        web3Wrapper.abiDecoder.addABI((AssetProxyOwner as any).compilerOutput.abi);
-        abiDecoder.addABI((Forwarder as any).compilerOutput.abi, 'Forwarder');
-        web3Wrapper.abiDecoder.addABI(contractWrappers.forwarder.abi);
+    convertToUnits: (b: BigNumber): BigNumber =>
+        Web3Wrapper.toUnitAmount(b, constants.ETH_DECIMALS),
+    convertToBaseUnits: (b: BigNumber): BigNumber =>
+        Web3Wrapper.toBaseUnitAmount(b, constants.ETH_DECIMALS),
+    getWeb3Wrapper(provider: Web3ProviderEngine): Web3Wrapper {
+        if (!web3Wrapper) {
+            web3Wrapper = new Web3Wrapper(provider);
+            utils.loadABIs(web3Wrapper);
+        }
+        return web3Wrapper;
+    },
+    getContractWrappersForChainId(
+        provider: Web3ProviderEngine,
+        chainId: number,
+    ): ContractWrappers {
+        if (!contractWrappers) {
+            contractWrappers = new ContractWrappers(provider, { chainId });
+        }
+        return contractWrappers;
     },
     getNetworkId(flags: any): number {
         const networkId = flags['network-id'];
@@ -66,13 +115,237 @@ export const utils = {
         }
         return networkId;
     },
-    getProvider(flags: any): any {
-        const networkId = utils.getNetworkId(flags);
-        const rpcSubprovider = new RpcSubprovider({ rpcUrl: utils.getNetworkRPCOrThrow(networkId) });
+    knownABIs(): Array<FallbackAbi | EventAbi | RevertErrorAbi> {
+        const ABIS = [
+            ...ExchangeContract.ABI(),
+            ...ForwarderContract.ABI(),
+            ...CoordinatorContract.ABI(),
+            ...StakingContract.ABI(),
+            ...ERC20TokenContract.ABI(),
+            ...ERC721TokenContract.ABI(),
+        ];
+        return ABIS;
+    },
+    loadABIs(wrapper: ContractWrappers | Web3Wrapper): void {
+        const abiDecoder =
+            (wrapper as Web3Wrapper).abiDecoder ||
+            (wrapper as ContractWrappers).getAbiDecoder();
+        abiDecoder.addABI(utils.knownABIs(), '0x');
+        abiDecoder.addABI([revertWithReasonABI], 'Revert');
+    },
+    getRpcSubprovider(profile: Profile): any {
+        const rpcUrl = profile['rpc-url']
+            ? profile['rpc-url']
+            : utils.getNetworkRPCOrThrow(profile['network-id'] || 1);
+        const rpcSubprovider = new RPCSubprovider(rpcUrl);
+        return rpcSubprovider;
+    },
+    getReadableContext(flags: any): ReadableContext {
         const provider = new Web3ProviderEngine();
-        provider.addProvider(rpcSubprovider);
-        (provider as any)._ready.go();
-        return provider;
+        const profile = utils.mergeFlagsAndProfile(flags);
+        const networkId = (profile['network-id'] as number) || 1;
+        provider.addProvider(utils.getRpcSubprovider(profile));
+        providerUtils.startProviderEngine(provider);
+        web3Wrapper = new Web3Wrapper(provider);
+        const contractAddresses = getContractAddressesForChainOrThrow(
+            networkId,
+        );
+        contractWrappers = new ContractWrappers(provider, {
+            chainId: networkId,
+            contractAddresses,
+        });
+        const context = {
+            networkId,
+            chainId: networkId,
+            provider,
+            web3Wrapper,
+            contractWrappers,
+            contractAddresses,
+        };
+        utils.loadABIs(contractWrappers);
+        utils.loadABIs(web3Wrapper);
+        return context;
+    },
+    mergeFlagsAndProfile(flags: any): Profile {
+        let profile: Profile;
+        if (flags.profile) {
+            profile =
+                (config.get(`profiles.${flags.profile}`) as Profile) || {};
+        } else {
+            profile = config.get(
+                `profiles.${config.get('profile')}`,
+            ) as Profile;
+            profile =
+                profile || (config.get(`profiles.default`) as Profile) || {};
+        }
+        ProfileKeys.map(k => {
+            if (flags[k]) {
+                profile = { ...profile, [k]: flags[k] };
+            }
+        });
+        return profile;
+    },
+    async getWritableProviderAsync(): Promise<{
+        provider:
+            | WalletConnectSubprovider
+            | MnemonicWalletSubprovider
+            | PrivateKeyWalletSubprovider
+            | RPCSubprovider;
+        providerType: WriteableProviderType;
+        'private-key': string | undefined;
+        mnemonic: string | undefined;
+        'base-derivation-path': string | undefined;
+        'rpc-url': string | undefined;
+        address: string | undefined;
+    }> {
+        let writeableProvider;
+        let walletDetails: any;
+        const providerType = (await prompt.selectWriteableProviderAsync())
+            .providerType;
+        switch (providerType) {
+            case WriteableProviderType.WalletConnect:
+                writeableProvider = await utils.getWalletConnectProviderAsync();
+                break;
+            case WriteableProviderType.PrivateKey:
+                const { privateKey } = await prompt.promptForPrivateKeyAsync();
+                walletDetails = { 'private-key': privateKey };
+                writeableProvider = new PrivateKeyWalletSubprovider(privateKey);
+                break;
+            case WriteableProviderType.Mnemonic:
+                const {
+                    baseDerivationPath,
+                    mnemonic,
+                } = await prompt.promptForMnemonicDetailsAsync();
+                walletDetails = {
+                    'base-derivation-path': baseDerivationPath,
+                    mnemonic,
+                };
+                writeableProvider = new MnemonicWalletSubprovider({
+                    mnemonic,
+                    baseDerivationPath,
+                });
+                break;
+            case WriteableProviderType.EthereumNode:
+                const {
+                    rpcUrl,
+                    address,
+                } = await prompt.promptForEthereumNodeRPCUrlAsync();
+                walletDetails = { 'rpc-url': address };
+                writeableProvider = new RPCSubprovider(rpcUrl);
+                break;
+            default:
+                throw new Error('Provider is currently unsupported');
+        }
+        return {
+            provider: writeableProvider,
+            providerType,
+            ...walletDetails,
+        };
+    },
+    async getWriteableContextAsync(flags: any): Promise<WriteableContext> {
+        const profile = utils.mergeFlagsAndProfile(flags);
+        let writeableProvider;
+        let providerType: WriteableProviderType | undefined;
+        if (profile['private-key']) {
+            writeableProvider = new PrivateKeyWalletSubprovider(
+                profile['private-key'],
+            );
+            providerType = WriteableProviderType.PrivateKey;
+        }
+        if (profile.mnemonic) {
+            writeableProvider = new MnemonicWalletSubprovider({
+                mnemonic: profile.mnemonic,
+                baseDerivationPath: profile['base-derivation-path'],
+            });
+            providerType = WriteableProviderType.Mnemonic;
+        }
+        let selectedAddress = profile.address;
+        if (!writeableProvider) {
+            const result = await utils.getWritableProviderAsync();
+            writeableProvider = result.provider;
+            selectedAddress = result.address;
+            providerType = result.providerType;
+        }
+        if (providerType === undefined) {
+            throw new Error('Unable to determine providerType');
+        }
+        const networkId = profile['network-id'] as number;
+        const provider = new Web3ProviderEngine();
+        provider.addProvider(writeableProvider);
+        provider.addProvider(utils.getRpcSubprovider(profile));
+        providerUtils.startProviderEngine(provider);
+        web3Wrapper = new Web3Wrapper(provider);
+        const contractAddresses = getContractAddressesForChainOrThrow(
+            networkId,
+        );
+        contractWrappers = new ContractWrappers(provider, {
+            chainId: networkId,
+            contractAddresses,
+        });
+        const accounts = await web3Wrapper.getAvailableAddressesAsync();
+        const selectedAddressExists =
+            selectedAddress && accounts.find(a => selectedAddress === a);
+        if (!selectedAddress || !selectedAddressExists) {
+            selectedAddress =
+                accounts.length > 1
+                    ? (
+                          await prompt.selectAddressAsync(
+                              accounts,
+                              contractWrappers.devUtils,
+                          )
+                      ).selectedAddress
+                    : accounts[0];
+        }
+        utils.loadABIs(contractWrappers);
+        utils.loadABIs(web3Wrapper);
+        return {
+            provider,
+            providerType,
+            selectedAddress,
+            web3Wrapper,
+            networkId,
+            chainId: networkId,
+            contractWrappers,
+            contractAddresses,
+        };
+    },
+    stopProvider(provider: Web3ProviderEngine): void {
+        provider.stop();
+        if (walletConnector) {
+            void walletConnector.killSession();
+        }
+    },
+    async getWalletConnectProviderAsync(): Promise<WalletConnectSubprovider> {
+        if (walletConnectSubprovider) {
+            return walletConnectSubprovider;
+        }
+        walletConnector = new WalletConnect({
+            bridge: 'https://bridge.walletconnect.org',
+        });
+        walletConnectSubprovider = new WalletConnectSubprovider(
+            walletConnector,
+        );
+        return new Promise((resolve, reject) => {
+            if (!walletConnector.connected) {
+                walletConnector
+                    .createSession()
+                    .then(() => printTextAsQR(walletConnector.uri));
+            }
+            walletConnector.on('connect', (error, payload) =>
+                error ? reject(error) : resolve(walletConnectSubprovider),
+            );
+            walletConnector.on('session_update', (error, payload) => {
+                if (error) {
+                    throw error;
+                }
+            });
+
+            walletConnector.on('disconnect', (error, payload) => {
+                if (error) {
+                    throw error;
+                }
+            });
+        });
     },
     getNetworkRPCOrThrow(networkId: Networks): string {
         const url = NETWORK_ID_TO_RPC_URL[networkId];
@@ -81,47 +354,43 @@ export const utils = {
         }
         return url;
     },
-    extractOrders(inputArguments: any, to: string, contractWrappers: ContractWrappers): Order[] | SignedOrder[] {
+    extractOrders(inputArguments: any, to: string): Order[] | SignedOrder[] {
         let orders: Order[] = [];
         if (inputArguments.order) {
-            orders.push(inputArguments.order);
+            const order = inputArguments.order;
+            if (inputArguments.signature) {
+                (order as SignedOrder).signature = inputArguments.signature;
+            }
+            orders.push(order);
         } else if (inputArguments.orders) {
             orders = inputArguments.orders;
 
             if (inputArguments.signatures) {
                 _.forEach(orders, (order, index) => {
-                    (order as SignedOrder).signature = inputArguments.signatures[index];
+                    (order as SignedOrder).signature =
+                        inputArguments.signatures[index];
                 });
             }
         }
-        // Normalize orders
-        const firstOrder = orders[0];
-        // Order call data can be optimised as it is assumed they are
-        // all the same asset data in some scenarios
-        _.forEach(orders, order => {
-            if (order.makerAssetData === '0x') {
-                order.makerAssetData = firstOrder.makerAssetData;
-            }
-            if (order.takerAssetData === '0x') {
-                order.takerAssetData = firstOrder.takerAssetData;
-            }
-            // Forwarder assumes the taker asset is WETH
-            if (order.takerAssetData === '0x' && to === contractWrappers.forwarder.address) {
-                order.takerAssetData = assetDataUtils.encodeERC20AssetData(
-                    contractWrappers.forwarder.etherTokenAddress,
-                );
-            }
-        });
         return orders;
     },
     extractAccountsAndTokens(
         orders: Order[],
-    ): { accounts: { [key: string]: string }; tokens: { [key: string]: string } } {
+    ): {
+        accounts: { [key: string]: string };
+        tokens: { [key: string]: string };
+    } {
         let accounts = { taker: '' };
         let tokens = {};
         _.forEach(orders, (order, index) => {
-            const extractedMakerTaker = utils.extractMakerTaker(order, index.toString());
-            const extractedTokens = utils.extractTokens(order, index.toString());
+            const extractedMakerTaker = utils.extractMakerTaker(
+                order,
+                index.toString(),
+            );
+            const extractedTokens = utils.extractTokens(
+                order,
+                index.toString(),
+            );
             accounts = _.merge(accounts, extractedMakerTaker);
             tokens = _.merge(tokens, extractedTokens);
         });
@@ -130,15 +399,43 @@ export const utils = {
             tokens,
         };
     },
-    extractMakerTaker(order: Order, position: string = ''): { [key: string]: string } {
+    extractMakerTaker(
+        order: Order,
+        position: string = '',
+    ): { [key: string]: string } {
         const accounts = {
             [`maker${position}`]: order.makerAddress,
         };
         return accounts;
     },
-    extractTokens(order: Order, position: string = ''): { [key: string]: string } {
-        const makerAssetData = assetDataUtils.decodeAssetDataOrThrow(order.makerAssetData) as ERC20AssetData;
-        const takerAssetData = assetDataUtils.decodeAssetDataOrThrow(order.takerAssetData) as ERC20AssetData;
+    async awaitTransactionWithSpinnerAsync(
+        name: string,
+        fnAsync: () => PromiseWithTransactionHash<
+            TransactionReceiptWithDecodedLogs
+        >,
+    ): Promise<TransactionReceiptWithDecodedLogs> {
+        const spinner = ora(name).start();
+        let result;
+        try {
+            result = await fnAsync();
+        } catch (e) {
+            spinner.fail(e.message);
+            console.log(JSON.stringify(e));
+            throw e;
+        }
+        spinner.stop();
+        return result;
+    },
+    extractTokens(
+        order: Order,
+        position: string = '',
+    ): { [key: string]: string } {
+        const makerAssetData = assetDataUtils.decodeAssetDataOrThrow(
+            order.makerAssetData,
+        ) as ERC20AssetData;
+        const takerAssetData = assetDataUtils.decodeAssetDataOrThrow(
+            order.takerAssetData,
+        ) as ERC20AssetData;
         const tokens = {
             [`makerToken${position}`]: makerAssetData.tokenAddress,
             [`takerToken${position}`]: takerAssetData.tokenAddress,

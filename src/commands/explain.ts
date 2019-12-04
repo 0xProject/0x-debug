@@ -1,6 +1,7 @@
 import { Command, flags } from '@oclif/command';
+import inquirer = require('inquirer');
 
-import { defaultFlags, renderFlags } from '../global_flags';
+import { DEFAULT_READALE_FLAGS, DEFAULT_RENDER_FLAGS } from '../global_flags';
 import { explainTransactionPrinter } from '../printers/explain_transaction_printer';
 import { jsonPrinter } from '../printers/json_printer';
 import { TxExplainer } from '../tx_explainer';
@@ -12,9 +13,8 @@ export class Explain extends Command {
     public static examples = [`$ 0x-debug explain [tx]`];
 
     public static flags = {
-        help: flags.help({ char: 'h' }),
-        'network-id': defaultFlags.networkId(),
-        json: renderFlags.json,
+        ...DEFAULT_RENDER_FLAGS,
+        ...DEFAULT_READALE_FLAGS,
     };
 
     public static args = [{ name: 'tx' }];
@@ -23,14 +23,17 @@ export class Explain extends Command {
     public async run(): Promise<void> {
         // tslint:disable-next-line:no-shadowed-variable
         const { args, flags } = this.parse(Explain);
-        const provider = utils.getProvider(flags);
-        const networkId = utils.getNetworkId(flags);
-        (provider as any)._ready.go();
+        const { provider, networkId } = utils.getReadableContext(flags);
         const explainer = new TxExplainer(provider, networkId);
-        const output = await explainer.explainTransactionAsync(args.tx);
+        let tx = args.tx;
+        if (!tx) {
+            const { txHash } = await inquirer.prompt([{ message: 'Enter txHash', type: 'input', name: 'txHash' }]);
+            tx = txHash;
+        }
+        const output = await explainer.explainTransactionAsync(tx);
         flags.json
             ? await jsonPrinter.printConsole(output)
             : await explainTransactionPrinter.printConsole(output, provider, networkId);
-        provider.stop();
+        utils.stopProvider(provider);
     }
 }

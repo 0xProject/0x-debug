@@ -1,37 +1,31 @@
 // Decodes any 0x transaction
-import { OrderValidatorContract } from '@0x/abi-gen-wrappers';
-import { AssetProxyOwner, Forwarder } from '@0x/contract-artifacts';
 import { ContractWrappers } from '@0x/contract-wrappers';
+import { Web3ProviderEngine } from '@0x/subproviders';
 import { Order, SignedOrder } from '@0x/types';
-import { AbiDecoder, BigNumber, DecodedCalldata } from '@0x/utils';
+import { AbiDecoder, BigNumber, DecodedCalldata, RevertError } from '@0x/utils';
 import { Web3Wrapper } from '@0x/web3-wrapper';
 import {
     CallData,
     DecodedLogArgs,
     LogWithDecodedArgs,
-    MethodAbi,
     Provider,
     TransactionReceipt,
     TransactionReceiptWithDecodedLogs,
 } from 'ethereum-types';
-import * as _ from 'lodash';
 
 import { ExplainedTransactionOutput } from './types';
 import { utils } from './utils';
-
-const ERROR_PREFIX = '08c379a0';
 
 interface ExplainedTransaction {
     success: boolean;
     txHash: string;
     decodedInput: DecodedCalldata;
     decodedLogs?: Array<LogWithDecodedArgs<DecodedLogArgs>>;
-    revertReason: string | undefined;
+    revertReason: RevertError | undefined;
     gasUsed?: number;
     value?: BigNumber;
     txReceipt: TransactionReceipt;
     blockNumber: number;
-    callData?: string;
 }
 export const txExplainerUtils = {
     async explainTransactionAsync(
@@ -45,7 +39,9 @@ export const txExplainerUtils = {
         } catch (err) {
             throw new Error('TX_NOT_FOUND');
         }
-        const txReceipt = await web3Wrapper.getTransactionReceiptIfExistsAsync(txHash);
+        const txReceipt = await web3Wrapper.getTransactionReceiptIfExistsAsync(
+            txHash,
+        );
         if (!tx || !tx.blockNumber || !tx.input || !txReceipt) {
             throw new Error('TX_NOT_FOUND');
         }
@@ -67,14 +63,16 @@ export const txExplainerUtils = {
         const gasUsed = txReceipt.gasUsed;
         const isSuccess = txReceipt && txReceipt.status === 1;
         if (txReceipt && txReceipt.status === 1) {
-            decodedLogs = await txExplainerUtils.decodeLogsAsync(web3Wrapper, txReceipt);
+            decodedLogs = await txExplainerUtils.decodeLogsAsync(
+                web3Wrapper,
+                txReceipt,
+            );
         } else {
             // Make a call at that blockNumber to check for any revert reasons
             revertReason = await txExplainerUtils.decodeRevertReasonAsync(
                 web3Wrapper,
                 callData,
                 blockNumber,
-                abiDecoder,
             );
         }
         return {
@@ -87,32 +85,28 @@ export const txExplainerUtils = {
             decodedLogs,
             revertReason,
             txReceipt,
-            callData: tx.input,
         };
     },
     async decodeRevertReasonAsync(
         web3Wrapper: Web3Wrapper,
         callData: CallData,
         blockNumber: number,
-        abiDecoder: AbiDecoder,
-    ): Promise<string | undefined> {
+    ): Promise<RevertError | undefined> {
         let result;
         try {
             result = await web3Wrapper.callAsync(callData, blockNumber);
         } catch (e) {
             // Handle the case where an error is thrown as "Reverted <revert with reason>" i.e Parity via RPCSubprovider
-            const errorPrefixIndex = e.data.indexOf(ERROR_PREFIX);
-            if (errorPrefixIndex >= 0) {
-                const resultRaw = e.data.slice(errorPrefixIndex);
-                result = `0x${resultRaw}`;
+            if (e.data) {
+                const errorPrefixIndex = e.data.indexOf('0x');
+                result = e.data.slice(errorPrefixIndex);
             }
         }
-        if (result !== undefined) {
-            const decodedRevertReason = abiDecoder.decodeCalldataOrThrow(result);
-            if (decodedRevertReason.functionArguments.error) {
-                return decodedRevertReason.functionArguments.error;
-            }
+        if (result) {
+            const revertError = RevertError.decode(result, true);
+            return revertError;
         }
+
         return undefined;
     },
     async decodeLogsAsync(
@@ -130,63 +124,52 @@ export const txExplainerUtils = {
     },
 };
 
-const revertWithReasonABI: MethodAbi = {
-    constant: true,
-    inputs: [
-        {
-            name: 'error',
-            type: 'string',
-        },
-    ],
-    name: 'Error',
-    outputs: [
-        {
-            name: 'error',
-            type: 'string',
-        },
-    ],
-    payable: false,
-    stateMutability: 'view',
-    type: 'function',
-};
-
 export class TxExplainer {
     private _web3Wrapper: Web3Wrapper;
     private _contractWrappers: ContractWrappers;
-    constructor(provider: Provider, networkId: number) {
-        this._contractWrappers = new ContractWrappers(provider, { networkId });
-        this._web3Wrapper = new Web3Wrapper(provider);
-        utils.loadABIs(this._web3Wrapper, this._contractWrappers);
+    constructor(provider: Web3ProviderEngine, networkId: number) {
+        this._contractWrappers = utils.getContractWrappersForChainId(
+            provider,
+            networkId,
+        );
+        this._web3Wrapper = utils.getWeb3Wrapper(provider);
     }
 
-    public async explainTransactionAsync(txHash: string): Promise<ExplainedTransactionOutput> {
+    public async explainTransactionAsync(
+        txHash: string,
+    ): Promise<ExplainedTransactionOutput> {
         if (txHash === undefined) {
             throw new Error('txHash must be defined');
         }
         const decodedTx = await txExplainerUtils.explainTransactionAsync(
             this._web3Wrapper,
             txHash,
-            this._contractWrappers.getAbiDecoder(),
+            this._web3Wrapper.abiDecoder,
         );
         const inputArguments = decodedTx.decodedInput.functionArguments;
-        const orders: Order[] = utils.extractOrders(inputArguments, decodedTx.txReceipt.to, this._contractWrappers);
+        const orders: Order[] = utils.extractOrders(
+            inputArguments,
+            decodedTx.txReceipt.to,
+        );
         const { accounts, tokens } = utils.extractAccountsAndTokens(orders);
         const taker = decodedTx.txReceipt.from;
-        const contract: OrderValidatorContract = await (this._contractWrappers
-            .orderValidator as any)._getOrderValidatorContractAsync();
-        const ordersAndTradersInfo = await contract.getOrdersAndTradersInfo.callAsync(
-            orders as SignedOrder[],
-            _.map(orders, _o => taker),
-            {},
-            decodedTx.blockNumber,
-        );
-        const orderInfos = ordersAndTradersInfo[0];
-        const traderInfos = ordersAndTradersInfo[1];
-        const orderAndTraderInfo = _.map(orderInfos, (orderInfo, index) => {
-            const traderInfo = traderInfos[index];
+        const devUtils = this._contractWrappers.devUtils;
+
+        const [
+            orderStatus,
+            fillableTakerAssetAmounts,
+            isValidSignature,
+        ] = await devUtils
+            .getOrderRelevantStates(
+                orders as SignedOrder[],
+                orders.map(o => (o as SignedOrder).signature),
+            )
+            .callAsync({}, decodedTx.blockNumber);
+        const orderInfos = orderStatus.map((_o, i) => {
             return {
-                orderInfo,
-                traderInfo,
+                orderStatus: orderStatus[i],
+                fillableTakerAssetAmounts: fillableTakerAssetAmounts[i],
+                isValidSignature: isValidSignature[i],
             };
         });
         const output = {
@@ -196,7 +179,7 @@ export class TxExplainer {
             },
             tokens,
             orders,
-            orderAndTraderInfo,
+            orderAndTraderInfo: {},
             logs: decodedTx.decodedLogs,
             revertReason: decodedTx.revertReason,
             functionName: decodedTx.decodedInput.functionName,
@@ -204,8 +187,8 @@ export class TxExplainer {
             txStatus: decodedTx.txReceipt.status,
             gasUsed: decodedTx.txReceipt.gasUsed,
             blockNumber: decodedTx.txReceipt.blockNumber,
-            callData: decodedTx.callData,
+            orderInfos,
         };
-        return output;
+        return output as any;
     }
 }
