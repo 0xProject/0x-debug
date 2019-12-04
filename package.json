@@ -1,6 +1,6 @@
 {
     "name": "0x-debug",
-    "version": "0.0.2",
+    "version": "1.0.0",
     "author": "Jacob Evans @dekz",
     "bin": {
         "0x-debug": "./bin/run"
