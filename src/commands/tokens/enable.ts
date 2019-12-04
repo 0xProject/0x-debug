@@ -1,4 +1,4 @@
-import { ERC20TokenContract } from '@0x/abi-gen-wrappers';
+import { ERC20TokenContract } from '@0x/contract-wrappers';
 import { BigNumber } from '@0x/utils';
 import { Command, flags as oclifFlags } from '@oclif/command';
 

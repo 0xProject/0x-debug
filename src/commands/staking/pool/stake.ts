@@ -2,7 +2,7 @@ import {
     ERC20TokenContract,
     StakingContract,
     StakingProxyContract,
-} from '@0x/abi-gen-wrappers';
+} from '@0x/contract-wrappers';
 import { assetDataUtils } from '@0x/order-utils';
 import { BigNumber } from '@0x/utils';
 import { Web3Wrapper } from '@0x/web3-wrapper';

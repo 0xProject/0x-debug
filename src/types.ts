@@ -5,10 +5,10 @@ import {
     LogWithDecodedArgs,
     OrderInfo,
 } from '@0x/contract-wrappers';
+import { Web3ProviderEngine } from '@0x/subproviders';
 import { Order } from '@0x/types';
 import { Web3Wrapper } from '@0x/web3-wrapper';
 import { TransactionReceiptStatus } from 'ethereum-types';
-import { Web3ProviderEngine } from '@0x/subproviders';
 
 export interface NetworkSpecificConfigs {
     rpcUrl: string;
@@ -75,6 +75,7 @@ export enum Networks {
     Goerli = 5,
     Kovan = 42,
     Ganache = 50,
+    GanacheChainId = 1337,
 }
 
 export enum StakeStatus {

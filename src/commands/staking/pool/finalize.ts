@@ -1,4 +1,3 @@
-import { StakingContract } from '@0x/abi-gen-wrappers';
 import { Command, flags } from '@oclif/command';
 
 import {
@@ -27,16 +26,11 @@ export class Finalize extends Command {
     public async run(): Promise<void> {
         const { flags, argv } = this.parse(Finalize);
         const {
+            contractWrappers,
             provider,
             selectedAddress,
-            contractAddresses,
         } = await utils.getWriteableContextAsync(flags);
-        const stakingContract = new StakingContract(
-            contractAddresses.stakingProxy,
-            provider,
-            {},
-        );
-        this.log(selectedAddress);
+        const stakingContract = contractWrappers.staking;
         const result = await utils.awaitTransactionWithSpinnerAsync(
             'Finalizing Pool',
             () =>

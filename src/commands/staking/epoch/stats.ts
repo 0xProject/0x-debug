@@ -1,4 +1,3 @@
-import { StakingContract } from '@0x/abi-gen-wrappers';
 import { Command } from '@oclif/command';
 import { cli } from 'cli-ux';
 
@@ -27,12 +26,8 @@ export class Stats extends Command {
     // tslint:disable-next-line:async-suffix
     public async run(): Promise<void> {
         const { flags, argv } = this.parse(Stats);
-        const { provider, contractAddresses } = utils.getReadableContext(flags);
-        const stakingContract = new StakingContract(
-            contractAddresses.stakingProxy,
-            provider,
-            {},
-        );
+        const { contractWrappers } = utils.getReadableContext(flags);
+        const stakingContract = contractWrappers.staking;
         const currentEpoch = await stakingContract.currentEpoch().callAsync();
         const globalDelegatedStake = await stakingContract
             .getGlobalStakeByStatus(StakeStatus.Delegated)

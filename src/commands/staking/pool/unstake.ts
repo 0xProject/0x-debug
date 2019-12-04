@@ -1,4 +1,3 @@
-import { StakingContract } from '@0x/abi-gen-wrappers';
 import { BigNumber } from '@0x/utils';
 import { Command, flags } from '@oclif/command';
 import { cli } from 'cli-ux';
@@ -34,13 +33,9 @@ export class Unstake extends Command {
         const {
             provider,
             selectedAddress,
-            contractAddresses,
+            contractWrappers,
         } = await utils.getWriteableContextAsync(flags);
-        const stakingContract = new StakingContract(
-            contractAddresses.stakingProxy,
-            provider,
-            {},
-        );
+        const stakingContract = contractWrappers.staking;
         const poolId = flags['pool-id'];
         const stakingPoolInfo = await stakingContract
             .getStakeDelegatedToPoolByOwner(selectedAddress, poolId)

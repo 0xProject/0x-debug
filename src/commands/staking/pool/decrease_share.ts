@@ -1,4 +1,3 @@
-import { StakingContract } from '@0x/abi-gen-wrappers';
 import { BigNumber } from '@0x/utils';
 import { Command, flags } from '@oclif/command';
 import { cli } from 'cli-ux';
@@ -31,15 +30,11 @@ export class DecreaseShare extends Command {
     public async run(): Promise<void> {
         const { flags, argv } = this.parse(DecreaseShare);
         const {
+            contractWrappers,
             provider,
             selectedAddress,
-            contractAddresses,
         } = await utils.getWriteableContextAsync(flags);
-        const stakingContract = new StakingContract(
-            contractAddresses.stakingProxy,
-            provider,
-            {},
-        );
+        const stakingContract = contractWrappers.staking;
         const poolId = flags['pool-id'];
         const stakingPoolInfo = await stakingContract
             .getStakingPool(poolId)

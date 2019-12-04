@@ -1,21 +1,17 @@
-import {
-    CoordinatorContract,
-    ERC1155MintableContract,
-    ERC20TokenContract,
-    ERC721TokenContract,
-    ExchangeContract,
-    ForwarderContract,
-    getContractAddressesForChainOrThrow,
-    StakingContract,
-    StakingProxyContract,
-} from '@0x/abi-gen-wrappers';
 import { PromiseWithTransactionHash } from '@0x/base-contract';
+import { getContractAddressesForChainOrThrow } from '@0x/contract-addresses';
 import {
     ContractWrappers,
+    CoordinatorContract,
+    ERC20TokenContract,
+    ERC721TokenContract,
     EventAbi,
+    ExchangeContract,
     FallbackAbi,
+    ForwarderContract,
     MethodAbi,
     RevertErrorAbi,
+    StakingContract,
 } from '@0x/contract-wrappers';
 import { assetDataUtils } from '@0x/order-utils';
 import {
@@ -47,13 +43,6 @@ import {
     WriteableProviderType,
 } from './types';
 import { WalletConnectSubprovider } from './wallet_connnect_subprovider';
-// HACK load and export for revert errors...
-// export so tsc doesn't remove on compilation
-export { CoordinatorRevertErrors } from '@0x/contracts-coordinator';
-export { ExchangeRevertErrors } from '@0x/contracts-exchange';
-export { ForwarderRevertErrors } from '@0x/contracts-exchange-forwarder';
-export { LibMathRevertErrors } from '@0x/contracts-exchange-libs';
-export { StakingRevertErrors } from '@0x/contracts-staking';
 
 // tslint:disable-next-line:no-var-requires
 const ora = require('ora');
@@ -70,6 +59,7 @@ const NETWORK_ID_TO_RPC_URL: { [key in Networks]: string } = {
         'https://rinkeby.infura.io/v3/1e72108f28f046ae911df32c932c9bc6',
     [Networks.Goerli]: 'http://localhost:8545',
     [Networks.Ganache]: 'http://localhost:8545',
+    [Networks.GanacheChainId]: 'http://localhost:8545',
 };
 
 const revertWithReasonABI: MethodAbi = {
@@ -130,11 +120,9 @@ export const utils = {
             ...ExchangeContract.ABI(),
             ...ForwarderContract.ABI(),
             ...CoordinatorContract.ABI(),
-            ...StakingProxyContract.ABI(),
             ...StakingContract.ABI(),
             ...ERC20TokenContract.ABI(),
             ...ERC721TokenContract.ABI(),
-            ...ERC1155MintableContract.ABI(),
         ];
         return ABIS;
     },

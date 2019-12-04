@@ -1,4 +1,3 @@
-import { StakingContract } from '@0x/abi-gen-wrappers';
 import { BigNumber } from '@0x/utils';
 import { Command } from '@oclif/command';
 
@@ -28,15 +27,11 @@ export class Create extends Command {
     public async run(): Promise<void> {
         const { flags, argv } = this.parse(Create);
         const {
+            contractWrappers,
             provider,
             selectedAddress,
-            contractAddresses,
         } = await utils.getWriteableContextAsync(flags);
-        const stakingContract = new StakingContract(
-            contractAddresses.stakingProxy,
-            provider,
-            {},
-        );
+        const stakingContract = contractWrappers.staking;
         const { input } = await prompt.promptForInputAsync(
             'Input Operator Share (in ppm)',
         );
