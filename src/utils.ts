@@ -143,7 +143,7 @@ export const utils = {
     getReadableContext(flags: any): ReadableContext {
         const provider = new Web3ProviderEngine();
         const profile = utils.mergeFlagsAndProfile(flags);
-        const networkId = profile['network-id'] as number;
+        const networkId = (profile['network-id'] as number) || 1;
         provider.addProvider(utils.getRpcSubprovider(profile));
         providerUtils.startProviderEngine(provider);
         web3Wrapper = new Web3Wrapper(provider);
@@ -349,7 +349,7 @@ export const utils = {
     },
     getNetworkRPCOrThrow(networkId: Networks): string {
         const url = NETWORK_ID_TO_RPC_URL[networkId];
-        if (_.isUndefined(url)) {
+        if (url === undefined) {
             throw new Error('UNSUPPORTED_NETWORK');
         }
         return url;
