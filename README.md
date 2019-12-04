@@ -18,7 +18,7 @@ $ npm install -g 0x-debug
 $ 0x-debug COMMAND
 running command...
 $ 0x-debug (-v|--version|version)
-0x-debug/0.0.2 darwin-x64 node-v11.13.0
+0x-debug/1.0.0 darwin-x64 node-v11.13.0
 $ 0x-debug --help [COMMAND]
 USAGE
   $ 0x-debug COMMAND
@@ -71,10 +71,10 @@ OPTIONS
   --tx
 
 EXAMPLE
-  $ 0x-debug abidecode [abi encoded data]
+  $ 0x-debug abi_decode [abi encoded data]
 ```
 
-_See code: [src/commands/abi_decode.ts](https://github.com/dekz/0x-debug/blob/v0.0.2/src/commands/abi_decode.ts)_
+_See code: [src/commands/abi_decode.ts](https://github.com/dekz/0x-debug/blob/v1.0.0/src/commands/abi_decode.ts)_
 
 ## `0x-debug config [KEY] [VALUE]`
 
@@ -91,7 +91,7 @@ EXAMPLE
   $ 0x-debug config [KEY] [VALUE]
 ```
 
-_See code: [src/commands/config.ts](https://github.com/dekz/0x-debug/blob/v0.0.2/src/commands/config.ts)_
+_See code: [src/commands/config.ts](https://github.com/dekz/0x-debug/blob/v1.0.0/src/commands/config.ts)_
 
 ## `0x-debug explain [TX]`
 
@@ -112,7 +112,7 @@ EXAMPLE
   $ 0x-debug explain [tx]
 ```
 
-_See code: [src/commands/explain.ts](https://github.com/dekz/0x-debug/blob/v0.0.2/src/commands/explain.ts)_
+_See code: [src/commands/explain.ts](https://github.com/dekz/0x-debug/blob/v1.0.0/src/commands/explain.ts)_
 
 ## `0x-debug help [COMMAND]`
 
@@ -151,7 +151,7 @@ EXAMPLE
   $ 0x-debug mesh:orders
 ```
 
-_See code: [src/commands/mesh/orders.ts](https://github.com/dekz/0x-debug/blob/v0.0.2/src/commands/mesh/orders.ts)_
+_See code: [src/commands/mesh/orders.ts](https://github.com/dekz/0x-debug/blob/v1.0.0/src/commands/mesh/orders.ts)_
 
 ## `0x-debug mesh:stats`
 
@@ -173,7 +173,7 @@ EXAMPLE
   $ 0x-debug mesh:stats
 ```
 
-_See code: [src/commands/mesh/stats.ts](https://github.com/dekz/0x-debug/blob/v0.0.2/src/commands/mesh/stats.ts)_
+_See code: [src/commands/mesh/stats.ts](https://github.com/dekz/0x-debug/blob/v1.0.0/src/commands/mesh/stats.ts)_
 
 ## `0x-debug mesh:subscribe`
 
@@ -195,7 +195,7 @@ EXAMPLE
   $ 0x-debug mesh:subscribe
 ```
 
-_See code: [src/commands/mesh/subscribe.ts](https://github.com/dekz/0x-debug/blob/v0.0.2/src/commands/mesh/subscribe.ts)_
+_See code: [src/commands/mesh/subscribe.ts](https://github.com/dekz/0x-debug/blob/v1.0.0/src/commands/mesh/subscribe.ts)_
 
 ## `0x-debug misc:call [ADDRESS] [CALLDATA]`
 
@@ -220,7 +220,7 @@ EXAMPLE
   $ 0x-debug misc:call [address] [callData]
 ```
 
-_See code: [src/commands/misc/call.ts](https://github.com/dekz/0x-debug/blob/v0.0.2/src/commands/misc/call.ts)_
+_See code: [src/commands/misc/call.ts](https://github.com/dekz/0x-debug/blob/v1.0.0/src/commands/misc/call.ts)_
 
 ## `0x-debug misc:current_block [ADDRESS] [CALLDATA]`
 
@@ -241,7 +241,7 @@ EXAMPLE
   $ 0x-debug misc:current_block
 ```
 
-_See code: [src/commands/misc/current_block.ts](https://github.com/dekz/0x-debug/blob/v0.0.2/src/commands/misc/current_block.ts)_
+_See code: [src/commands/misc/current_block.ts](https://github.com/dekz/0x-debug/blob/v1.0.0/src/commands/misc/current_block.ts)_
 
 ## `0x-debug misc:function_registry_check`
 
@@ -263,7 +263,7 @@ EXAMPLE
   $ 0x-debug function_registration_check
 ```
 
-_See code: [src/commands/misc/function_registry_check.ts](https://github.com/dekz/0x-debug/blob/v0.0.2/src/commands/misc/function_registry_check.ts)_
+_See code: [src/commands/misc/function_registry_check.ts](https://github.com/dekz/0x-debug/blob/v1.0.0/src/commands/misc/function_registry_check.ts)_
 
 ## `0x-debug order:create`
 
@@ -286,7 +286,7 @@ EXAMPLE
   $ 0x-debug order:create
 ```
 
-_See code: [src/commands/order/create.ts](https://github.com/dekz/0x-debug/blob/v0.0.2/src/commands/order/create.ts)_
+_See code: [src/commands/order/create.ts](https://github.com/dekz/0x-debug/blob/v1.0.0/src/commands/order/create.ts)_
 
 ## `0x-debug order:hash`
 
@@ -309,7 +309,7 @@ EXAMPLE
   $ 0x-debug order:hash --order [JSON_ORDER]
 ```
 
-_See code: [src/commands/order/hash.ts](https://github.com/dekz/0x-debug/blob/v0.0.2/src/commands/order/hash.ts)_
+_See code: [src/commands/order/hash.ts](https://github.com/dekz/0x-debug/blob/v1.0.0/src/commands/order/hash.ts)_
 
 ## `0x-debug order:info`
 
@@ -333,7 +333,7 @@ EXAMPLE
   $ 0x-debug order:info --order-hash [ORDER_HASH]
 ```
 
-_See code: [src/commands/order/info.ts](https://github.com/dekz/0x-debug/blob/v0.0.2/src/commands/order/info.ts)_
+_See code: [src/commands/order/info.ts](https://github.com/dekz/0x-debug/blob/v1.0.0/src/commands/order/info.ts)_
 
 ## `0x-debug profile:create`
 
@@ -354,7 +354,7 @@ EXAMPLE
   $ 0x-debug profile:create
 ```
 
-_See code: [src/commands/profile/create.ts](https://github.com/dekz/0x-debug/blob/v0.0.2/src/commands/profile/create.ts)_
+_See code: [src/commands/profile/create.ts](https://github.com/dekz/0x-debug/blob/v1.0.0/src/commands/profile/create.ts)_
 
 ## `0x-debug staking:epoch:end`
 
@@ -377,7 +377,7 @@ EXAMPLE
   $ 0x-debug staking:epoch:end
 ```
 
-_See code: [src/commands/staking/epoch/end.ts](https://github.com/dekz/0x-debug/blob/v0.0.2/src/commands/staking/epoch/end.ts)_
+_See code: [src/commands/staking/epoch/end.ts](https://github.com/dekz/0x-debug/blob/v1.0.0/src/commands/staking/epoch/end.ts)_
 
 ## `0x-debug staking:epoch:stats`
 
@@ -398,7 +398,7 @@ EXAMPLE
   $ 0x-debug staking:epoch:stats
 ```
 
-_See code: [src/commands/staking/epoch/stats.ts](https://github.com/dekz/0x-debug/blob/v0.0.2/src/commands/staking/epoch/stats.ts)_
+_See code: [src/commands/staking/epoch/stats.ts](https://github.com/dekz/0x-debug/blob/v1.0.0/src/commands/staking/epoch/stats.ts)_
 
 ## `0x-debug staking:pool:create`
 
@@ -421,7 +421,7 @@ EXAMPLE
   $ 0x-debug staking:pool:create
 ```
 
-_See code: [src/commands/staking/pool/create.ts](https://github.com/dekz/0x-debug/blob/v0.0.2/src/commands/staking/pool/create.ts)_
+_See code: [src/commands/staking/pool/create.ts](https://github.com/dekz/0x-debug/blob/v1.0.0/src/commands/staking/pool/create.ts)_
 
 ## `0x-debug staking:pool:decrease_share`
 
@@ -445,7 +445,7 @@ EXAMPLE
   $ 0x-debug staking:pool:decrease_share
 ```
 
-_See code: [src/commands/staking/pool/decrease_share.ts](https://github.com/dekz/0x-debug/blob/v0.0.2/src/commands/staking/pool/decrease_share.ts)_
+_See code: [src/commands/staking/pool/decrease_share.ts](https://github.com/dekz/0x-debug/blob/v1.0.0/src/commands/staking/pool/decrease_share.ts)_
 
 ## `0x-debug staking:pool:finalize`
 
@@ -469,7 +469,7 @@ EXAMPLE
   $ 0x-debug staking:pool:finalize
 ```
 
-_See code: [src/commands/staking/pool/finalize.ts](https://github.com/dekz/0x-debug/blob/v0.0.2/src/commands/staking/pool/finalize.ts)_
+_See code: [src/commands/staking/pool/finalize.ts](https://github.com/dekz/0x-debug/blob/v1.0.0/src/commands/staking/pool/finalize.ts)_
 
 ## `0x-debug staking:pool:stake`
 
@@ -493,7 +493,7 @@ EXAMPLE
   $ 0x-debug staking:pool:stake
 ```
 
-_See code: [src/commands/staking/pool/stake.ts](https://github.com/dekz/0x-debug/blob/v0.0.2/src/commands/staking/pool/stake.ts)_
+_See code: [src/commands/staking/pool/stake.ts](https://github.com/dekz/0x-debug/blob/v1.0.0/src/commands/staking/pool/stake.ts)_
 
 ## `0x-debug staking:pool:stats`
 
@@ -515,7 +515,7 @@ EXAMPLE
   $ 0x-debug staking:pool:stats
 ```
 
-_See code: [src/commands/staking/pool/stats.ts](https://github.com/dekz/0x-debug/blob/v0.0.2/src/commands/staking/pool/stats.ts)_
+_See code: [src/commands/staking/pool/stats.ts](https://github.com/dekz/0x-debug/blob/v1.0.0/src/commands/staking/pool/stats.ts)_
 
 ## `0x-debug staking:pool:unstake`
 
@@ -539,7 +539,7 @@ EXAMPLE
   $ 0x-debug staking:pool:unstake
 ```
 
-_See code: [src/commands/staking/pool/unstake.ts](https://github.com/dekz/0x-debug/blob/v0.0.2/src/commands/staking/pool/unstake.ts)_
+_See code: [src/commands/staking/pool/unstake.ts](https://github.com/dekz/0x-debug/blob/v1.0.0/src/commands/staking/pool/unstake.ts)_
 
 ## `0x-debug staking:pool:withdraw_rewards`
 
@@ -563,7 +563,7 @@ EXAMPLE
   $ 0x-debug staking:pool:withdraw_rewards
 ```
 
-_See code: [src/commands/staking/pool/withdraw_rewards.ts](https://github.com/dekz/0x-debug/blob/v0.0.2/src/commands/staking/pool/withdraw_rewards.ts)_
+_See code: [src/commands/staking/pool/withdraw_rewards.ts](https://github.com/dekz/0x-debug/blob/v1.0.0/src/commands/staking/pool/withdraw_rewards.ts)_
 
 ## `0x-debug tokens:enable`
 
@@ -587,5 +587,5 @@ EXAMPLE
   $ 0x-debug tokens:enable
 ```
 
-_See code: [src/commands/tokens/enable.ts](https://github.com/dekz/0x-debug/blob/v0.0.2/src/commands/tokens/enable.ts)_
+_See code: [src/commands/tokens/enable.ts](https://github.com/dekz/0x-debug/blob/v1.0.0/src/commands/tokens/enable.ts)_
 <!-- commandsstop -->
