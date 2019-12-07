@@ -1,10 +1,13 @@
 import { Command } from '@oclif/command';
-import { DEFAULT_READALE_FLAGS, DEFAULT_RENDER_FLAGS } from '../../global_flags';
-import { utils } from '../../utils';
+
 import { config } from '../../config';
-import { Profile, WriteableProviderType } from '../../types';
+import {
+    DEFAULT_READALE_FLAGS,
+    DEFAULT_RENDER_FLAGS,
+} from '../../global_flags';
 import { prompt } from '../../prompt';
-import { Web3Wrapper } from '@0x/web3-wrapper';
+import { Profile, WriteableProviderType } from '../../types';
+import { utils } from '../../utils';
 
 export class Create extends Command {
     public static description = 'Creates a profile';
@@ -21,9 +24,15 @@ export class Create extends Command {
     // tslint:disable-next-line:async-suffix
     public async run(): Promise<void> {
         let profile: Profile;
-        const profileName = (await prompt.promptForInputAsync('Profile name')).input;
-        const networkId = (await prompt.promptForInputAsync('Network Id')).input;
-        const { provider, providerType, ...rest } = await utils.getWritableProviderAsync();
+        const profileName = (await prompt.promptForInputAsync('Profile name'))
+            .input;
+        const networkId = (await prompt.promptForInputAsync('Network Id'))
+            .input;
+        const {
+            provider,
+            providerType,
+            ...rest
+        } = await utils.getWritableProviderAsync();
         profile = {
             ...rest,
             walletconnect: providerType === WriteableProviderType.WalletConnect,

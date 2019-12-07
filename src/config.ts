@@ -36,4 +36,4 @@ const schema: { [key: string]: JSONSchema } = {
         },
     },
 };
-export const config = new Conf({ schema });
+export const config = new Conf({ schema, projectName: '0x-debug' });
