@@ -1,3 +1,5 @@
+import { StakingProxyContract } from '@0x/contract-wrappers';
+import { BigNumber } from '@0x/utils';
 import { Command, flags } from '@oclif/command';
 import { cli } from 'cli-ux';
 
@@ -8,6 +10,23 @@ import {
 } from '../../../global_flags';
 import { StakeStatus } from '../../../types';
 import { utils } from '../../../utils';
+import { batchStakingCallAsync } from '../epoch/stats';
+
+const decodeCallResultsForPool = (rawResults: any[], poolId: string) => {
+    const [
+        delegatedStakeByPool,
+        stakingPoolStatus,
+        stakingPool,
+        rewardsByPoolId,
+    ]: any[] = rawResults;
+    return {
+        delegatedStakeByPool,
+        stakingPoolStatus,
+        poolId,
+        stakingPool,
+        rewardsByPoolId,
+    };
+};
 
 export class Stats extends Command {
     public static description = 'Details for the current Staking Epoch';
@@ -27,34 +46,73 @@ export class Stats extends Command {
         const { flags, argv } = this.parse(Stats);
         const { contractWrappers } = utils.getReadableContext(flags);
         const stakingContract = contractWrappers.staking;
-        const currentEpoch = await stakingContract.currentEpoch().callAsync();
-        const rawPoolId = flags['pool-id'];
-        const globalDelegatedStake = await stakingContract
-            .getGlobalStakeByStatus(StakeStatus.Delegated)
-            .callAsync();
-        let poolDetails = {};
-        if (rawPoolId) {
-            const delegatedStakeByPool = await stakingContract
-                .getTotalStakeDelegatedToPool(rawPoolId)
-                .callAsync();
-            const stakingPoolStatus = await stakingContract
-                .getStakingPoolStatsThisEpoch(rawPoolId)
-                .callAsync();
-            poolDetails = {
-                delegatedStakeByPool,
-                stakingPoolStatus,
-                poolId: rawPoolId,
-            };
-        }
-        const epochStartTimeSeconds = await stakingContract
-            .currentEpochStartTimeInSeconds()
-            .callAsync();
-        const epochDurationInSeconds = await stakingContract
-            .epochDurationInSeconds()
-            .callAsync();
-        const epochEndTimeSeconds = epochStartTimeSeconds.plus(
+
+        const [
+            currentEpoch,
+            globalDelegatedStake,
+            globalUndelegatedStake,
+            epochStartTimeSeconds,
             epochDurationInSeconds,
+            epochEndTimeSeconds,
+            lastPoolIdHex,
+        ]: any[] = await batchStakingCallAsync(
+            [
+                stakingContract.currentEpoch(),
+                stakingContract.getGlobalStakeByStatus(StakeStatus.Delegated),
+                stakingContract.getGlobalStakeByStatus(StakeStatus.Undelegated),
+                stakingContract.currentEpochStartTimeInSeconds(),
+                stakingContract.epochDurationInSeconds(),
+                stakingContract.getCurrentEpochEarliestEndTimeInSeconds(),
+                stakingContract.lastPoolId(),
+            ],
+            contractWrappers,
         );
+        let poolDetails;
+        const allPoolDetails: any = {};
+        const batchCallsForPool = (poolId: string) => {
+            return [
+                stakingContract.getTotalStakeDelegatedToPool(poolId),
+                stakingContract.getStakingPoolStatsThisEpoch(poolId),
+                stakingContract.getStakingPool(poolId),
+                stakingContract.rewardsByPoolId(poolId),
+            ];
+        };
+        const rawPoolId = flags['pool-id'];
+
+        if (rawPoolId === 'all') {
+            let batchCalls: any[] = [];
+            const lastPoolId = utils.decodePoolId(lastPoolIdHex);
+            for (let i = 1; i <= lastPoolId; i++) {
+                const poolId = utils.encodePoolId(i);
+                batchCalls = [...batchCalls, ...batchCallsForPool(poolId)];
+            }
+            const response = await batchStakingCallAsync(
+                batchCalls,
+                contractWrappers,
+            );
+            for (let i = 1; i <= lastPoolId; i++) {
+                const rawResultsForPool = response.splice(
+                    0,
+                    batchCalls.length / lastPoolId,
+                );
+                const poolId = utils.encodePoolId(i);
+                allPoolDetails[poolId] = decodeCallResultsForPool(
+                    rawResultsForPool,
+                    poolId,
+                );
+            }
+        } else if (rawPoolId) {
+            const poolIdParsed = utils.parsePoolId(rawPoolId);
+            poolDetails = decodeCallResultsForPool(
+                await batchStakingCallAsync(
+                    batchCallsForPool(
+                        utils.encodePoolId(poolIdParsed.toNumber()),
+                    ),
+                    contractWrappers,
+                ),
+                utils.encodePoolId(poolIdParsed.toNumber()),
+            );
+        }
         const [
             rewardsAvailable,
             numPoolsToFinalize,
@@ -81,7 +139,7 @@ export class Stats extends Command {
                 totalRewardsFinalized,
             },
             globalDelegatedStake,
-            poolDetails,
+            poolDetails: poolDetails || allPoolDetails,
         };
         cli.styledJSON(output);
     }

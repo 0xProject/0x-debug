@@ -1,5 +1,4 @@
 import { PromiseWithTransactionHash } from '@0x/base-contract';
-import { getContractAddressesForChainOrThrow } from '@0x/contract-addresses';
 import {
     ContractWrappers,
     CoordinatorContract,
@@ -26,6 +25,7 @@ import {
     TransactionReceiptWithDecodedLogs,
     Web3Wrapper,
 } from '@0x/web3-wrapper';
+import { cli } from 'cli-ux';
 // tslint:disable-next-line:no-implicit-dependencies
 import * as ethers from 'ethers';
 import _ = require('lodash');
@@ -44,8 +44,6 @@ import {
 } from './types';
 import { WalletConnectSubprovider } from './wallet_connnect_subprovider';
 
-// tslint:disable-next-line:no-var-requires
-const ora = require('ora');
 // HACK prevent ethers from printing 'Multiple definitions for'
 ethers.errors.setLogLevel('error');
 
@@ -88,10 +86,10 @@ let walletConnector: WalletConnect;
 let walletConnectSubprovider: WalletConnectSubprovider;
 
 export const utils = {
-    convertToUnits: (b: BigNumber): BigNumber =>
-        Web3Wrapper.toUnitAmount(b, constants.ETH_DECIMALS),
-    convertToBaseUnits: (b: BigNumber): BigNumber =>
-        Web3Wrapper.toBaseUnitAmount(b, constants.ETH_DECIMALS),
+    convertToUnits: (b: BigNumber | string | number): BigNumber =>
+        Web3Wrapper.toUnitAmount(new BigNumber(b), constants.ETH_DECIMALS),
+    convertToBaseUnits: (b: BigNumber | string | number): BigNumber =>
+        Web3Wrapper.toBaseUnitAmount(new BigNumber(b), constants.ETH_DECIMALS),
     getWeb3Wrapper(provider: Web3ProviderEngine): Web3Wrapper {
         if (!web3Wrapper) {
             web3Wrapper = new Web3Wrapper(provider);
@@ -99,6 +97,16 @@ export const utils = {
         }
         return web3Wrapper;
     },
+    parsePoolId: (poolId: string): BigNumber => {
+        if (poolId.startsWith('0x')) {
+            return new BigNumber(poolId, 16);
+        }
+        return new BigNumber(poolId);
+    },
+    encodePoolId: (poolId: number) =>
+        `0x${new BigNumber(poolId).toString(16).padStart(64, '0')}`,
+    decodePoolId: (poolIdHex: string) =>
+        new BigNumber(poolIdHex, 16).toNumber(),
     getContractWrappersForChainId(
         provider: Web3ProviderEngine,
         chainId: number,
@@ -107,13 +115,6 @@ export const utils = {
             contractWrappers = new ContractWrappers(provider, { chainId });
         }
         return contractWrappers;
-    },
-    getNetworkId(flags: any): number {
-        const networkId = flags['network-id'];
-        if (!networkId) {
-            throw new Error('NETWORK_ID_REQUIRED');
-        }
-        return networkId;
     },
     knownABIs(): Array<FallbackAbi | EventAbi | RevertErrorAbi> {
         const ABIS = [
@@ -147,12 +148,8 @@ export const utils = {
         provider.addProvider(utils.getRpcSubprovider(profile));
         providerUtils.startProviderEngine(provider);
         web3Wrapper = new Web3Wrapper(provider);
-        const contractAddresses = getContractAddressesForChainOrThrow(
-            networkId,
-        );
         contractWrappers = new ContractWrappers(provider, {
             chainId: networkId,
-            contractAddresses,
         });
         const context = {
             networkId,
@@ -160,7 +157,7 @@ export const utils = {
             provider,
             web3Wrapper,
             contractWrappers,
-            contractAddresses,
+            contractAddresses: contractWrappers.contractAddresses,
         };
         utils.loadABIs(contractWrappers);
         utils.loadABIs(web3Wrapper);
@@ -269,18 +266,14 @@ export const utils = {
         if (providerType === undefined) {
             throw new Error('Unable to determine providerType');
         }
-        const networkId = profile['network-id'] as number;
+        const networkId = profile['network-id'] || 1;
         const provider = new Web3ProviderEngine();
         provider.addProvider(writeableProvider);
         provider.addProvider(utils.getRpcSubprovider(profile));
         providerUtils.startProviderEngine(provider);
         web3Wrapper = new Web3Wrapper(provider);
-        const contractAddresses = getContractAddressesForChainOrThrow(
-            networkId,
-        );
         contractWrappers = new ContractWrappers(provider, {
             chainId: networkId,
-            contractAddresses,
         });
         const accounts = await web3Wrapper.getAvailableAddressesAsync();
         const selectedAddressExists =
@@ -306,7 +299,7 @@ export const utils = {
             networkId,
             chainId: networkId,
             contractWrappers,
-            contractAddresses,
+            contractAddresses: contractWrappers.contractAddresses,
         };
     },
     stopProvider(provider: Web3ProviderEngine): void {
@@ -414,16 +407,16 @@ export const utils = {
             TransactionReceiptWithDecodedLogs
         >,
     ): Promise<TransactionReceiptWithDecodedLogs> {
-        const spinner = ora(name).start();
+        cli.action.start(name);
         let result;
         try {
             result = await fnAsync();
         } catch (e) {
-            spinner.fail(e.message);
             console.log(JSON.stringify(e));
+            cli.action.stop(e.message);
             throw e;
         }
-        spinner.stop();
+        cli.action.stop();
         return result;
     },
     extractTokens(

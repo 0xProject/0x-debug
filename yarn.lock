@@ -44,10 +44,6 @@
   dependencies:
     lodash "^4.17.11"
 
-"@0x/contract-artifacts@^3.0.0":
-  version "3.0.0"
-  resolved "https://registry.yarnpkg.com/@0x/contract-artifacts/-/contract-artifacts-3.0.0.tgz#9f45ca848137971a4598506d54ba5320d6976091"
-
 "@0x/contract-wrappers@^13.0.0":
   version "13.0.0"
   resolved "https://registry.yarnpkg.com/@0x/contract-wrappers/-/contract-wrappers-13.0.0.tgz#adcf03f11f7406631d0590dee6f4cd034be03502"

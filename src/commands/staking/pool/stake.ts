@@ -63,26 +63,21 @@ export class Stake extends Command {
         const stakingPoolInfo = await stakingContract
             .getStakeDelegatedToPoolByOwner(selectedAddress, poolId)
             .callAsync();
-        const convertToUnits = (b: BigNumber | string): BigNumber =>
-            Web3Wrapper.toUnitAmount(new BigNumber(b), constants.ETH_DECIMALS);
-        const convertToBaseUnits = (b: BigNumber | string): BigNumber =>
-            Web3Wrapper.toBaseUnitAmount(
-                new BigNumber(b),
-                constants.ETH_DECIMALS,
-            );
         const stakingPoolInfoUnits = {
             ...stakingPoolInfo,
-            currentEpochBalance: convertToUnits(
+            currentEpochBalance: utils.convertToUnits(
                 stakingPoolInfo.currentEpochBalance,
             ),
-            nextEpochBalance: convertToUnits(stakingPoolInfo.nextEpochBalance),
+            nextEpochBalance: utils.convertToUnits(
+                stakingPoolInfo.nextEpochBalance,
+            ),
         };
         const undelegatedStakingPoolInfoUnits = {
             ...stakingPoolInfo,
-            currentEpochBalance: convertToUnits(
+            currentEpochBalance: utils.convertToUnits(
                 undelegatedStakingPoolInfo.currentEpochBalance,
             ),
-            nextEpochBalance: convertToUnits(
+            nextEpochBalance: utils.convertToUnits(
                 undelegatedStakingPoolInfo.nextEpochBalance,
             ),
         };
@@ -146,7 +141,7 @@ export class Stake extends Command {
         if (needsToDepositStake) {
             functionCalls.push(
                 stakingContract
-                    .stake(convertToBaseUnits(input))
+                    .stake(utils.convertToBaseUnits(input))
                     .getABIEncodedTransactionData(),
             );
         }
@@ -155,7 +150,7 @@ export class Stake extends Command {
                 .moveStake(
                     constants.UNDELEGATED_POOL,
                     { status: StakeStatus.Delegated, poolId },
-                    convertToBaseUnits(input),
+                    utils.convertToBaseUnits(input),
                 )
                 .getABIEncodedTransactionData(),
         );
