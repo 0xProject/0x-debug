@@ -8,7 +8,6 @@ import {
     CallData,
     DecodedLogArgs,
     LogWithDecodedArgs,
-    Provider,
     TransactionReceipt,
     TransactionReceiptWithDecodedLogs,
 } from 'ethereum-types';
@@ -69,11 +68,16 @@ export const txExplainerUtils = {
             );
         } else {
             // Make a call at that blockNumber to check for any revert reasons
-            revertReason = await txExplainerUtils.decodeRevertReasonAsync(
-                web3Wrapper,
-                callData,
-                blockNumber,
-            );
+            try {
+                revertReason = await txExplainerUtils.decodeRevertReasonIfExistsAsync(
+                    web3Wrapper,
+                    callData,
+                    blockNumber,
+                );
+            } catch (e) {
+                console.log(e);
+                console.log('Unable to perform eth_call');
+            }
         }
         return {
             blockNumber,
@@ -87,7 +91,7 @@ export const txExplainerUtils = {
             txReceipt,
         };
     },
-    async decodeRevertReasonAsync(
+    async decodeRevertReasonIfExistsAsync(
         web3Wrapper: Web3Wrapper,
         callData: CallData,
         blockNumber: number,
@@ -152,30 +156,37 @@ export class TxExplainer {
             decodedTx.txReceipt.to,
         );
         const { accounts, tokens } = utils.extractAccountsAndTokens(orders);
-        const taker = decodedTx.txReceipt.from;
         const devUtils = this._contractWrappers.devUtils;
 
-        const [
-            orderStatus,
-            fillableTakerAssetAmounts,
-            isValidSignature,
-        ] = await devUtils
-            .getOrderRelevantStates(
-                orders as SignedOrder[],
-                orders.map(o => (o as SignedOrder).signature),
-            )
-            .callAsync({}, decodedTx.blockNumber);
-        const orderInfos = orderStatus.map((_o, i) => {
-            return {
-                orderStatus: orderStatus[i],
-                fillableTakerAssetAmounts: fillableTakerAssetAmounts[i],
-                isValidSignature: isValidSignature[i],
-            };
-        });
+        let orderInfos;
+        try {
+            const [
+                orderStatus,
+                fillableTakerAssetAmounts,
+                isValidSignature,
+            ] = await devUtils
+                .getOrderRelevantStates(
+                    orders as SignedOrder[],
+                    orders.map(o => (o as SignedOrder).signature),
+                )
+                .callAsync({}, decodedTx.blockNumber);
+            orderInfos = orderStatus.map((_o, i) => {
+                return {
+                    orderStatus: orderStatus[i],
+                    fillableTakerAssetAmounts: fillableTakerAssetAmounts[i],
+                    isValidSignature: isValidSignature[i],
+                };
+            });
+        } catch (e) {
+            console.log(
+                'Unable to determine order validity at block: ',
+                decodedTx.blockNumber,
+            );
+        }
         const output = {
             accounts: {
                 ...accounts,
-                taker: decodedTx.txReceipt.from,
+                sender: decodedTx.txReceipt.from,
             },
             tokens,
             orders,
