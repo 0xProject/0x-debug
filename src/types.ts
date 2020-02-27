@@ -7,6 +7,7 @@ import {
 } from '@0x/contract-wrappers';
 import { Web3ProviderEngine } from '@0x/subproviders';
 import { Order } from '@0x/types';
+import { RevertError } from '@0x/utils';
 import { Web3Wrapper } from '@0x/web3-wrapper';
 import { TransactionReceiptStatus } from 'ethereum-types';
 
@@ -27,12 +28,11 @@ export interface ExplainedTransactionOutput {
     blockNumber: number;
     gasUsed: number;
     tx: string;
-    txStatus: TransactionReceiptStatus;
+    status: TransactionReceiptStatus;
     accounts: Accounts;
     tokens: Tokens;
     orders: Order[];
-    orderAndTraderInfo: any[];
-    revertReason?: string;
+    revertReason?: string | RevertError;
     logs?: Array<LogWithDecodedArgs<DecodedLogArgs>>;
     functionName: string;
     callData?: string;

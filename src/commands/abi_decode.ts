@@ -1,3 +1,4 @@
+import { assetDataUtils } from '@0x/order-utils';
 import { RevertError } from '@0x/utils';
 import { DecodedCalldata } from '@0x/web3-wrapper';
 import { Command, flags } from '@oclif/command';
@@ -55,9 +56,18 @@ export class AbiDecode extends Command {
                     decodedCallData = abiDecoder.decodeCalldataOrThrow(arg);
                     outputs.push(decodedCallData);
                 } catch (e) {
+                    console.log(e);
+                    // do nothing
+                }
+                try {
+                    const assetData = assetDataUtils.decodeAssetDataOrThrow(
+                        arg,
+                    );
+                } catch (e) {
                     // do nothing
                 }
             }
+            console.log(JSON.stringify(outputs));
         }
         for (const output of outputs) {
             flags.json

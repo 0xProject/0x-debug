@@ -27,13 +27,23 @@ export class Explain extends Command {
         const explainer = new TxExplainer(provider, networkId);
         let tx = args.tx;
         if (!tx) {
-            const { txHash } = await inquirer.prompt([{ message: 'Enter txHash', type: 'input', name: 'txHash' }]);
+            const { txHash } = await inquirer.prompt([
+                { message: 'Enter txHash', type: 'input', name: 'txHash' },
+            ]);
             tx = txHash;
         }
-        const output = await explainer.explainTransactionAsync(tx);
-        flags.json
-            ? await jsonPrinter.printConsole(output)
-            : await explainTransactionPrinter.printConsole(output, provider, networkId);
-        utils.stopProvider(provider);
+        try {
+            const output = await explainer.explainTransactionAsync(tx);
+            flags.json
+                ? await jsonPrinter.printConsole(output)
+                : await explainTransactionPrinter.printConsole(
+                      output,
+                      provider,
+                      networkId,
+                  );
+            utils.stopProvider(provider);
+        } catch (e) {
+            return this.error(e.message);
+        }
     }
 }
