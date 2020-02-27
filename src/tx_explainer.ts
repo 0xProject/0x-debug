@@ -60,6 +60,7 @@ export const txExplainerUtils = {
             nonce: tx.nonce,
             value: tx.value,
             gas: tx.gas,
+            gasPrice: tx.gasPrice,
         };
         const blockNumber = tx.blockNumber;
         if (!callData.data) {
