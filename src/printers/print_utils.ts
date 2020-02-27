@@ -124,7 +124,7 @@ export class PrintUtils {
         txStatus: TransactionReceiptStatus,
         gasUsed: number,
         decodedLogs: LogEntry[] | Array<LogWithDecodedArgs<{}>> | undefined,
-        data: string[][] = [],
+        data: any[][] = [],
         eventNames: string[] = DEFAULT_EVENTS,
     ): void {
         PrintUtils.printHeader('Transaction');

@@ -8,9 +8,11 @@ import {
     ExchangeContract,
     FallbackAbi,
     ForwarderContract,
+    IERC20BridgeSamplerContract,
     MethodAbi,
     RevertErrorAbi,
     StakingContract,
+    StakingProxyContract,
 } from '@0x/contract-wrappers';
 import { assetDataUtils } from '@0x/order-utils';
 import {
@@ -122,8 +124,10 @@ export const utils = {
             ...ForwarderContract.ABI(),
             ...CoordinatorContract.ABI(),
             ...StakingContract.ABI(),
+            ...StakingProxyContract.ABI(),
             ...ERC20TokenContract.ABI(),
             ...ERC721TokenContract.ABI(),
+            ...IERC20BridgeSamplerContract.ABI(),
         ];
         return ABIS;
     },

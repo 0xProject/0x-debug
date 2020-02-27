@@ -31,7 +31,7 @@ export const explainTransactionPrinter = {
         PrintUtils.printTransaction(
             output.functionName,
             output.tx,
-            output.txStatus,
+            output.status,
             output.gasUsed,
             output.logs,
             additionalInfo,
