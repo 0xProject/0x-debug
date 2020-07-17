@@ -20,7 +20,7 @@
         "cli-ux": "^5.3.3",
         "conf": "^6.2.0",
         "inquirer": "^7.0.0",
-        "lodash": "^4.17.11",
+        "lodash": "^4.17.19",
         "node-webcrypto-ossl": "^1.0.48",
         "ts-node-dev": "^1.0.0-pre.44",
         "tslib": "^1",
