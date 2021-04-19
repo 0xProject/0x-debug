@@ -1,41 +1,21 @@
-import { PromiseWithTransactionHash } from '@0x/base-contract';
-import {
-    ContractWrappers,
-    CoordinatorContract,
-    ERC20TokenContract,
-    ERC721TokenContract,
-    EventAbi,
-    ExchangeContract,
-    FallbackAbi,
-    ForwarderContract,
-    IERC20BridgeSamplerContract,
-    MethodAbi,
-    RevertErrorAbi,
-    StakingContract,
-    StakingProxyContract,
-} from '@0x/contract-wrappers';
-import { assetDataUtils } from '@0x/order-utils';
+// tslint:disable-next-line:no-implicit-dependencies
+import * as ethers from "ethers";
+ethers.errors.setLogLevel("error");
+
+import { ContractWrappers, MethodAbi } from "@0x/contract-wrappers";
 import {
     MnemonicWalletSubprovider,
     PrivateKeyWalletSubprovider,
     RPCSubprovider,
     Web3ProviderEngine,
-} from '@0x/subproviders';
-import { ERC20AssetData, Order, SignedOrder } from '@0x/types';
-import { BigNumber, providerUtils } from '@0x/utils';
-import {
-    TransactionReceiptWithDecodedLogs,
-    Web3Wrapper,
-} from '@0x/web3-wrapper';
-import { cli } from 'cli-ux';
-// tslint:disable-next-line:no-implicit-dependencies
-import * as ethers from 'ethers';
-import _ = require('lodash');
-import { printTextAsQR, WalletConnect } from 'walletconnect-node';
-
-import { config } from './config';
-import { constants } from './constants';
-import { prompt } from './prompt';
+} from "@0x/subproviders";
+import { BigNumber, providerUtils } from "@0x/utils";
+import { AbiDefinition, Web3Wrapper } from "@0x/web3-wrapper";
+import * as fs from "fs";
+import * as path from "path";
+import { config } from "./config";
+import { constants } from "./constants";
+import { prompt } from "./prompt";
 import {
     Networks,
     Profile,
@@ -43,49 +23,49 @@ import {
     ReadableContext,
     WriteableContext,
     WriteableProviderType,
-} from './types';
-import { WalletConnectSubprovider } from './wallet_connnect_subprovider';
+} from "./types";
+import _ = require("lodash");
 
 // HACK prevent ethers from printing 'Multiple definitions for'
-ethers.errors.setLogLevel('error');
+ethers.errors.setLogLevel("error");
+let LOADED_ABIS: AbiDefinition[];
+let CONTRACT_ADDRESS_NAMES: { [address: string]: string | undefined };
 
 const NETWORK_ID_TO_RPC_URL: { [key in Networks]: string } = {
-    [Networks.Mainnet]: 'https://mainnet.0x.org',
+    [Networks.Mainnet]: "https://mainnet.0x.org",
     [Networks.Kovan]:
-        'https://kovan.infura.io/v3/1e72108f28f046ae911df32c932c9bc6',
+        "https://kovan.infura.io/v3/1e72108f28f046ae911df32c932c9bc6",
     [Networks.Ropsten]:
-        'https://ropsten.infura.io/v3/1e72108f28f046ae911df32c932c9bc6',
+        "https://ropsten.infura.io/v3/1e72108f28f046ae911df32c932c9bc6",
     [Networks.Rinkeby]:
-        'https://rinkeby.infura.io/v3/1e72108f28f046ae911df32c932c9bc6',
-    [Networks.Goerli]: 'http://localhost:8545',
-    [Networks.Ganache]: 'http://localhost:8545',
-    [Networks.GanacheChainId]: 'http://localhost:8545',
+        "https://rinkeby.infura.io/v3/1e72108f28f046ae911df32c932c9bc6",
+    [Networks.Goerli]: "http://localhost:8545",
+    [Networks.Ganache]: "http://localhost:8545",
+    [Networks.GanacheChainId]: "http://localhost:8545",
 };
 
 const revertWithReasonABI: MethodAbi = {
     constant: true,
     inputs: [
         {
-            name: 'error',
-            type: 'string',
+            name: "error",
+            type: "string",
         },
     ],
-    name: 'Error',
+    name: "Error",
     outputs: [
         {
-            name: 'error',
-            type: 'string',
+            name: "error",
+            type: "string",
         },
     ],
     payable: false,
-    stateMutability: 'view',
-    type: 'function',
+    stateMutability: "view",
+    type: "function",
 };
 
 let contractWrappers: ContractWrappers;
 let web3Wrapper: Web3Wrapper;
-let walletConnector: WalletConnect;
-let walletConnectSubprovider: WalletConnectSubprovider;
 
 export const utils = {
     convertToUnits: (b: BigNumber | string | number): BigNumber =>
@@ -99,56 +79,78 @@ export const utils = {
         }
         return web3Wrapper;
     },
-    parsePoolId: (poolId: string): BigNumber => {
-        if (poolId.startsWith('0x')) {
-            return new BigNumber(poolId, 16);
-        }
-        return new BigNumber(poolId);
-    },
-    encodePoolId: (poolId: number) =>
-        `0x${new BigNumber(poolId).toString(16).padStart(64, '0')}`,
-    decodePoolId: (poolIdHex: string) =>
-        new BigNumber(poolIdHex, 16).toNumber(),
     getContractWrappersForChainId(
         provider: Web3ProviderEngine,
-        chainId: number,
+        chainId: number
     ): ContractWrappers {
         if (!contractWrappers) {
             contractWrappers = new ContractWrappers(provider, { chainId });
         }
         return contractWrappers;
     },
-    knownABIs(): Array<FallbackAbi | EventAbi | RevertErrorAbi> {
-        const ABIS = [
-            ...ExchangeContract.ABI(),
-            ...ForwarderContract.ABI(),
-            ...CoordinatorContract.ABI(),
-            ...StakingContract.ABI(),
-            ...StakingProxyContract.ABI(),
-            ...ERC20TokenContract.ABI(),
-            ...ERC721TokenContract.ABI(),
-            ...IERC20BridgeSamplerContract.ABI(),
-        ];
-        return ABIS;
+    knownABIs(): Array<AbiDefinition> {
+        if (LOADED_ABIS) {
+            return LOADED_ABIS;
+        }
+        const dirs = ["./abis"];
+        let abis: AbiDefinition[] = [];
+        dirs.forEach((dir) => {
+            const files = fs.readdirSync(path.join(__dirname, dir));
+            for (const f of files) {
+                const contents = fs
+                    .readFileSync(path.join(__dirname, dir, f))
+                    .toString();
+                const abi: AbiDefinition[] = JSON.parse(contents);
+                abis = [...abis, ...abi];
+            }
+        });
+        LOADED_ABIS = abis;
+        return LOADED_ABIS;
     },
     loadABIs(wrapper: ContractWrappers | Web3Wrapper): void {
         const abiDecoder =
             (wrapper as Web3Wrapper).abiDecoder ||
             (wrapper as ContractWrappers).getAbiDecoder();
-        abiDecoder.addABI(utils.knownABIs(), '0x');
-        abiDecoder.addABI([revertWithReasonABI], 'Revert');
+        abiDecoder.addABI(utils.knownABIs(), "0x");
+        abiDecoder.addABI([revertWithReasonABI], "Revert");
+    },
+    loadContractAddressNames() {
+        const dirs = ["./tokenlists"];
+        if (CONTRACT_ADDRESS_NAMES) {
+            return CONTRACT_ADDRESS_NAMES;
+        }
+        const semanticNames: { [address: string]: string | undefined } = {};
+        dirs.forEach((dir) => {
+            const files = fs.readdirSync(path.join(__dirname, dir));
+            for (const f of files) {
+                const contents = fs
+                    .readFileSync(path.join(__dirname, dir, f))
+                    .toString();
+                const tokens: {
+                    address: string;
+                    name: string;
+                    symbol: string;
+                }[] = JSON.parse(contents).tokens;
+                for (const t of tokens) {
+                    semanticNames[t.address] = t.symbol;
+                    semanticNames[t.address.toLowerCase()] = t.symbol;
+                }
+            }
+        });
+        CONTRACT_ADDRESS_NAMES = semanticNames;
+        return CONTRACT_ADDRESS_NAMES;
     },
     getRpcSubprovider(profile: Profile): any {
-        const rpcUrl = profile['rpc-url']
-            ? profile['rpc-url']
-            : utils.getNetworkRPCOrThrow(profile['network-id'] || 1);
+        const rpcUrl = profile["rpc-url"]
+            ? profile["rpc-url"]
+            : utils.getNetworkRPCOrThrow(profile["network-id"] || 1);
         const rpcSubprovider = new RPCSubprovider(rpcUrl);
         return rpcSubprovider;
     },
     getReadableContext(flags: any): ReadableContext {
         const provider = new Web3ProviderEngine();
         const profile = utils.mergeFlagsAndProfile(flags);
-        const networkId = (profile['network-id'] as number) || 1;
+        const networkId = (profile["network-id"] as number) || 1;
         provider.addProvider(utils.getRpcSubprovider(profile));
         providerUtils.startProviderEngine(provider);
         web3Wrapper = new Web3Wrapper(provider);
@@ -163,6 +165,7 @@ export const utils = {
             contractWrappers,
             contractAddresses: contractWrappers.contractAddresses,
         };
+        ethers.errors.setLogLevel("error");
         utils.loadABIs(contractWrappers);
         utils.loadABIs(web3Wrapper);
         return context;
@@ -174,12 +177,12 @@ export const utils = {
                 (config.get(`profiles.${flags.profile}`) as Profile) || {};
         } else {
             profile = config.get(
-                `profiles.${config.get('profile')}`,
+                `profiles.${config.get("profile")}`
             ) as Profile;
             profile =
                 profile || (config.get(`profiles.default`) as Profile) || {};
         }
-        ProfileKeys.map(k => {
+        ProfileKeys.map((k) => {
             if (flags[k]) {
                 profile = { ...profile, [k]: flags[k] };
             }
@@ -188,15 +191,14 @@ export const utils = {
     },
     async getWritableProviderAsync(): Promise<{
         provider:
-            | WalletConnectSubprovider
             | MnemonicWalletSubprovider
             | PrivateKeyWalletSubprovider
             | RPCSubprovider;
         providerType: WriteableProviderType;
-        'private-key': string | undefined;
+        "private-key": string | undefined;
         mnemonic: string | undefined;
-        'base-derivation-path': string | undefined;
-        'rpc-url': string | undefined;
+        "base-derivation-path": string | undefined;
+        "rpc-url": string | undefined;
         address: string | undefined;
     }> {
         let writeableProvider;
@@ -204,12 +206,9 @@ export const utils = {
         const providerType = (await prompt.selectWriteableProviderAsync())
             .providerType;
         switch (providerType) {
-            case WriteableProviderType.WalletConnect:
-                writeableProvider = await utils.getWalletConnectProviderAsync();
-                break;
             case WriteableProviderType.PrivateKey:
                 const { privateKey } = await prompt.promptForPrivateKeyAsync();
-                walletDetails = { 'private-key': privateKey };
+                walletDetails = { "private-key": privateKey };
                 writeableProvider = new PrivateKeyWalletSubprovider(privateKey);
                 break;
             case WriteableProviderType.Mnemonic:
@@ -218,7 +217,7 @@ export const utils = {
                     mnemonic,
                 } = await prompt.promptForMnemonicDetailsAsync();
                 walletDetails = {
-                    'base-derivation-path': baseDerivationPath,
+                    "base-derivation-path": baseDerivationPath,
                     mnemonic,
                 };
                 writeableProvider = new MnemonicWalletSubprovider({
@@ -231,11 +230,11 @@ export const utils = {
                     rpcUrl,
                     address,
                 } = await prompt.promptForEthereumNodeRPCUrlAsync();
-                walletDetails = { 'rpc-url': address };
+                walletDetails = { "rpc-url": address };
                 writeableProvider = new RPCSubprovider(rpcUrl);
                 break;
             default:
-                throw new Error('Provider is currently unsupported');
+                throw new Error("Provider is currently unsupported");
         }
         return {
             provider: writeableProvider,
@@ -247,16 +246,16 @@ export const utils = {
         const profile = utils.mergeFlagsAndProfile(flags);
         let writeableProvider;
         let providerType: WriteableProviderType | undefined;
-        if (profile['private-key']) {
+        if (profile["private-key"]) {
             writeableProvider = new PrivateKeyWalletSubprovider(
-                profile['private-key'],
+                profile["private-key"]
             );
             providerType = WriteableProviderType.PrivateKey;
         }
         if (profile.mnemonic) {
             writeableProvider = new MnemonicWalletSubprovider({
                 mnemonic: profile.mnemonic,
-                baseDerivationPath: profile['base-derivation-path'],
+                baseDerivationPath: profile["base-derivation-path"],
             });
             providerType = WriteableProviderType.Mnemonic;
         }
@@ -268,9 +267,9 @@ export const utils = {
             providerType = result.providerType;
         }
         if (providerType === undefined) {
-            throw new Error('Unable to determine providerType');
+            throw new Error("Unable to determine providerType");
         }
-        const networkId = profile['network-id'] || 1;
+        const networkId = profile["network-id"] || 1;
         const provider = new Web3ProviderEngine();
         provider.addProvider(writeableProvider);
         provider.addProvider(utils.getRpcSubprovider(profile));
@@ -281,14 +280,14 @@ export const utils = {
         });
         const accounts = await web3Wrapper.getAvailableAddressesAsync();
         const selectedAddressExists =
-            selectedAddress && accounts.find(a => selectedAddress === a);
+            selectedAddress && accounts.find((a) => selectedAddress === a);
         if (!selectedAddress || !selectedAddressExists) {
             selectedAddress =
                 accounts.length > 1
                     ? (
                           await prompt.selectAddressAsync(
                               accounts,
-                              contractWrappers.devUtils,
+                              contractWrappers.devUtils
                           )
                       ).selectedAddress
                     : accounts[0];
@@ -308,135 +307,12 @@ export const utils = {
     },
     stopProvider(provider: Web3ProviderEngine): void {
         provider.stop();
-        if (walletConnector) {
-            void walletConnector.killSession();
-        }
-    },
-    async getWalletConnectProviderAsync(): Promise<WalletConnectSubprovider> {
-        if (walletConnectSubprovider) {
-            return walletConnectSubprovider;
-        }
-        walletConnector = new WalletConnect({
-            bridge: 'https://bridge.walletconnect.org',
-        });
-        walletConnectSubprovider = new WalletConnectSubprovider(
-            walletConnector,
-        );
-        return new Promise((resolve, reject) => {
-            if (!walletConnector.connected) {
-                walletConnector
-                    .createSession()
-                    .then(() => printTextAsQR(walletConnector.uri));
-            }
-            walletConnector.on('connect', (error, payload) =>
-                error ? reject(error) : resolve(walletConnectSubprovider),
-            );
-            walletConnector.on('session_update', (error, payload) => {
-                if (error) {
-                    throw error;
-                }
-            });
-
-            walletConnector.on('disconnect', (error, payload) => {
-                if (error) {
-                    throw error;
-                }
-            });
-        });
     },
     getNetworkRPCOrThrow(networkId: Networks): string {
         const url = NETWORK_ID_TO_RPC_URL[networkId];
         if (url === undefined) {
-            throw new Error('UNSUPPORTED_NETWORK');
+            throw new Error("UNSUPPORTED_NETWORK");
         }
         return url;
-    },
-    extractOrders(inputArguments: any, to: string): Order[] | SignedOrder[] {
-        let orders: Order[] = [];
-        if (inputArguments.order) {
-            const order = inputArguments.order;
-            if (inputArguments.signature) {
-                (order as SignedOrder).signature = inputArguments.signature;
-            }
-            orders.push(order);
-        } else if (inputArguments.orders) {
-            orders = inputArguments.orders;
-
-            if (inputArguments.signatures) {
-                _.forEach(orders, (order, index) => {
-                    (order as SignedOrder).signature =
-                        inputArguments.signatures[index];
-                });
-            }
-        }
-        return orders;
-    },
-    extractAccountsAndTokens(
-        orders: Order[],
-    ): {
-        accounts: { [key: string]: string };
-        tokens: { [key: string]: string };
-    } {
-        let accounts = { taker: '' };
-        let tokens = {};
-        _.forEach(orders, (order, index) => {
-            const extractedMakerTaker = utils.extractMakerTaker(
-                order,
-                index.toString(),
-            );
-            const extractedTokens = utils.extractTokens(
-                order,
-                index.toString(),
-            );
-            accounts = _.merge(accounts, extractedMakerTaker);
-            tokens = _.merge(tokens, extractedTokens);
-        });
-        return {
-            accounts,
-            tokens,
-        };
-    },
-    extractMakerTaker(
-        order: Order,
-        position: string = '',
-    ): { [key: string]: string } {
-        const accounts = {
-            [`maker${position}`]: order.makerAddress,
-        };
-        return accounts;
-    },
-    async awaitTransactionWithSpinnerAsync(
-        name: string,
-        fnAsync: () => PromiseWithTransactionHash<
-            TransactionReceiptWithDecodedLogs
-        >,
-    ): Promise<TransactionReceiptWithDecodedLogs> {
-        cli.action.start(name);
-        let result;
-        try {
-            result = await fnAsync();
-        } catch (e) {
-            console.log(JSON.stringify(e));
-            cli.action.stop(e.message);
-            throw e;
-        }
-        cli.action.stop();
-        return result;
-    },
-    extractTokens(
-        order: Order,
-        position: string = '',
-    ): { [key: string]: string } {
-        const makerAssetData = assetDataUtils.decodeAssetDataOrThrow(
-            order.makerAssetData,
-        ) as ERC20AssetData;
-        const takerAssetData = assetDataUtils.decodeAssetDataOrThrow(
-            order.takerAssetData,
-        ) as ERC20AssetData;
-        const tokens = {
-            [`makerToken${position}`]: makerAssetData.tokenAddress,
-            [`takerToken${position}`]: takerAssetData.tokenAddress,
-        };
-        return tokens;
     },
 };

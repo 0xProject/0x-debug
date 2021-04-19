@@ -1,0 +1,119 @@
+[
+  {
+    "inputs": [
+      {
+        "internalType": "contract IEtherTokenV06",
+        "name": "weth",
+        "type": "address"
+      }
+    ],
+    "stateMutability": "nonpayable",
+    "type": "constructor"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": false,
+        "internalType": "bytes32",
+        "name": "source",
+        "type": "bytes32"
+      },
+      {
+        "indexed": false,
+        "internalType": "contract IERC20TokenV06",
+        "name": "inputToken",
+        "type": "address"
+      },
+      {
+        "indexed": false,
+        "internalType": "contract IERC20TokenV06",
+        "name": "outputToken",
+        "type": "address"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "inputTokenAmount",
+        "type": "uint256"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "outputTokenAmount",
+        "type": "uint256"
+      }
+    ],
+    "name": "BridgeFill",
+    "type": "event"
+  },
+  {
+    "inputs": [],
+    "name": "BANCOR_ETH_ADDRESS",
+    "outputs": [
+      {
+        "internalType": "contract IERC20TokenV06",
+        "name": "",
+        "type": "address"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "components": [
+          {
+            "internalType": "bytes32",
+            "name": "source",
+            "type": "bytes32"
+          },
+          {
+            "internalType": "uint256",
+            "name": "takerTokenAmount",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint256",
+            "name": "makerTokenAmount",
+            "type": "uint256"
+          },
+          {
+            "internalType": "bytes",
+            "name": "bridgeData",
+            "type": "bytes"
+          }
+        ],
+        "internalType": "struct IBridgeAdapter.BridgeOrder",
+        "name": "order",
+        "type": "tuple"
+      },
+      {
+        "internalType": "contract IERC20TokenV06",
+        "name": "sellToken",
+        "type": "address"
+      },
+      {
+        "internalType": "contract IERC20TokenV06",
+        "name": "buyToken",
+        "type": "address"
+      },
+      {
+        "internalType": "uint256",
+        "name": "sellAmount",
+        "type": "uint256"
+      }
+    ],
+    "name": "trade",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "boughtAmount",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  }
+]
