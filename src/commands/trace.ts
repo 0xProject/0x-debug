@@ -30,38 +30,11 @@ interface State {
     tx: string;
 }
 
-interface GethTrace {
-    structLogs: GethTraceLine[];
-}
-
-interface GethTraceLine {
-    op: string;
-    depth: number;
-    stack: string[];
-    memory: string[];
-    gas: number;
-    gasCost: number;
-}
-
-interface AnnotatedTraceLine {
-    op: string;
-    depth: number;
-    gasCost: number;
-    subCalls: AnnotatedTraceLine[];
-    address: string;
-    callData: string;
-    signature: string;
-    decodedCallData?: DecodedCalldata;
-    parent?: AnnotatedTraceLine;
-    returnData?: string;
-    decodedReturnData?: any;
-    reverted?: boolean;
-    events?: { event: string; args: any; gasCost: number }[];
-}
-
 interface GethCustomEventTrace {
     topics: string[]; // hex, no padding, no prefix
     input: string; // hex, prefix, padded
+    gas: string; // hex encoded value
+    gasUsed: string; // hex encoded value
 }
 
 interface GethCustomCallTrace {
@@ -74,15 +47,20 @@ interface GethCustomCallTrace {
     output: string;
     calls: GethCustomCallTrace[];
     events: GethCustomEventTrace[];
+    reverted: boolean;
 }
 
-interface AnnotatedGethCustomEventTrace extends GethCustomEventTrace {
-    name: string;
-    args: any;
+interface AnnotatedGethCustomEventTrace
+    extends Omit<GethCustomEventTrace, "gas" | "gasUsed"> {
+    name?: string;
+    args?: any;
+    gas: number;
+    gasUsed: number;
 }
 
 interface AnnotatedGethCustomCallTrace
     extends Omit<GethCustomCallTrace, "gas" | "gasUsed" | "calls" | "events"> {
+    signature: string;
     decodedInput?: DecodedCalldata;
     decodedOutput?: any;
     gas: number;
@@ -91,108 +69,12 @@ interface AnnotatedGethCustomCallTrace
     events: AnnotatedGethCustomEventTrace[];
 }
 
-const CALL_OP_CODES = ["CALL", "CALLCODE", "STATICCALL", "DELEGATECALL"];
-const RETURN_OP_CODES = ["RETURN", "REVERT", "INVALID", "SELFDESTRUCT"];
-const LOG_OP_CODES = ["LOG0", "LOG1", "LOG2", "LOG3", "LOG4"];
-
 const isString = (x: any): x is string => {
     return Object.prototype.toString.call(x) === "[object String]";
 };
-
-const _parseReturnData = (
-    line: GethTraceLine,
-    encoder?: any
-): { decodedReturnData: any; returnData: string } => {
-    const offsetBytes = new BigNumber(
-        line.stack[line.stack.length - 1],
-        16
-    ).toNumber();
-    const lengthBytes = new BigNumber(
-        line.stack[line.stack.length - 2],
-        16
-    ).toNumber();
-    const data = line.memory
-        .join("")
-        .slice(offsetBytes * 2, offsetBytes * 2 + lengthBytes * 2);
-    let decoded;
-    if (encoder && encoder.length > 0) {
-        decoded = encoder[0].abiEncoder.decodeReturnValues(`0x${data}`);
-    }
-    return { decodedReturnData: decoded, returnData: data };
-};
-
-const _parseEvent = (
-    line: GethTraceLine,
-    abiDecoder: AbiDecoder
-): { event: string; args: any; gasCost: number } | undefined => {
-    const numIndexed = parseInt(line.op.split("LOG")[1]);
-    // DATA
-    // indexed topics[]
-    // length
-    // offset
-    const indexedRaw = line.stack.slice(
-        line.stack.length - 2 - numIndexed,
-        line.stack.length
-    );
-    const offsetBytes = new BigNumber(indexedRaw.pop()!, 16).toNumber();
-    const lengthBytes = new BigNumber(indexedRaw.pop()!, 16).toNumber();
-    const topic = indexedRaw.pop()!;
-    const indexedData = [...indexedRaw];
-    const logData = line.memory
-        .join("")
-        .slice(offsetBytes * 2, offsetBytes * 2 + lengthBytes * 2);
-    const decoded = abiDecoder.tryToDecodeLogOrNoop({
-        address: "0x",
-        logIndex: 0,
-        transactionIndex: 0,
-        transactionHash: "0x",
-        blockHash: "0x",
-        blockNumber: 1,
-        topics: [topic, ...indexedData].map((t) => `0x${t}`),
-        data: `0x${logData}`,
-    });
-    return (decoded as LogWithDecodedArgs<any>).args
-        ? { ...(decoded as LogWithDecodedArgs<any>), gasCost: line.gas }
-        : undefined;
-};
-
-const _parseCall = (
-    line: GethTraceLine,
-    abiDecoder: AbiDecoder
-): AnnotatedTraceLine => {
-    const stackIdx = ["CALL", "CALLCODE"].includes(line.op) ? 4 : 3;
-    const offsetBytes = new BigNumber(
-        line.stack[line.stack.length - stackIdx],
-        16
-    ).toNumber();
-    const lengthBytes = new BigNumber(
-        line.stack[line.stack.length - stackIdx - 1],
-        16
-    ).toNumber();
-    const callData = line.memory
-        .join("")
-        .slice(offsetBytes * 2, offsetBytes * 2 + lengthBytes * 2);
-    const signature = callData.slice(0, 8);
-    let address = line.stack[line.stack.length - 2];
-    address = `0x${new BigNumber(address, 16).toString(16)}`;
-    let decoded: DecodedCalldata | undefined;
-    try {
-        decoded = abiDecoder.decodeCalldataOrThrow(`0x${callData}`);
-    } catch (e) {
-        // Do nothing
-    }
-    const annotatedLine: AnnotatedTraceLine = {
-        decodedCallData: decoded,
-        signature,
-        address,
-        callData,
-        gasCost: line.gas,
-        subCalls: [],
-        op: line.op,
-        depth: line.depth,
-    };
-    return annotatedLine;
-};
+const TRACER = fs
+    .readFileSync(path.join(__dirname, "../", "call_tracer.js"))
+    .toString();
 
 export class Trace extends Command {
     public static description = "Trace the Ethereum transaction";
@@ -213,101 +95,90 @@ export class Trace extends Command {
 
     public static args = [{ name: "tx" }];
 
-    private static _decodeGethTrace(
-        trace: GethTrace,
-        abiDecoder: AbiDecoder,
-        txTo: string,
-        txCallData: string
-    ): AnnotatedTraceLine {
-        const annotatedTrace: AnnotatedTraceLine = {
-            op: "FALLBACK",
-            gasCost: 0,
-            subCalls: [],
-            callData: txCallData,
-            address: txTo,
-            depth: 0,
-            signature: txCallData.slice(0, 10),
-        };
+    private static _annotateGethTrace(
+        customTrace: GethCustomCallTrace,
+        abiDecoder: AbiDecoder
+    ): AnnotatedGethCustomCallTrace {
+        const annotateTrace = (
+            gethTrace: GethCustomCallTrace
+        ): AnnotatedGethCustomCallTrace => {
+            const aTrace: AnnotatedGethCustomCallTrace = {
+                ...gethTrace,
+                gas: parseInt(gethTrace.gas, 16),
+                gasUsed: parseInt(gethTrace.gasUsed, 16),
+                calls: [],
+                events: [],
+                signature: gethTrace.input.slice(0, 10),
+            };
 
-        try {
-            const txDecoded = abiDecoder.decodeCalldataOrThrow(txCallData);
-            annotatedTrace.decodedCallData = txDecoded;
-        } catch (e) {}
-
-        const parentByDepth: { [depth: number]: AnnotatedTraceLine } = {
-            0: annotatedTrace,
-        };
-        const structLogs = trace.structLogs.filter((l) =>
-            [...CALL_OP_CODES, ...RETURN_OP_CODES, ...LOG_OP_CODES].includes(
-                l.op
-            )
-        );
-        for (const [i, currentStep] of structLogs.entries()) {
-            if (CALL_OP_CODES.includes(currentStep.op)) {
-                const annotatedLine = _parseCall(currentStep, abiDecoder);
-                // If it's a DELEGATECALL then the real address making the outgoing call is the parent
-                if (currentStep.op === "DELEGATECALL") {
-                    annotatedLine.address =
-                        parentByDepth[annotatedLine.depth - 1].address;
-                }
-                if (!parentByDepth[annotatedLine.depth - 1]) {
-                    console.log("missing parent at depth", annotatedLine);
-                }
-                parentByDepth[annotatedLine.depth] = annotatedLine;
-                parentByDepth[annotatedLine.depth - 1].subCalls.push(
-                    annotatedLine
+            // input => decodedInput
+            try {
+                aTrace.decodedInput = abiDecoder.decodeCalldataOrThrow(
+                    aTrace.input
                 );
-            }
-            if (RETURN_OP_CODES.includes(currentStep.op)) {
-                const parent = parentByDepth[currentStep.depth - 1];
-                if (currentStep.op === "RETURN") {
-                    const { decodedReturnData, returnData } = _parseReturnData(
-                        currentStep,
-                        (abiDecoder as any)._selectorToFunctionInfo[
-                            `0x${parent.signature}`
-                        ]
+            } catch (e) {}
+
+            // output => decodedOutput
+            try {
+                if (aTrace.reverted) {
+                    const decodedRevertError = RevertError.decode(
+                        aTrace.output
                     );
-                    if (parent.returnData) {
-                        throw new Error("Parent already has return data");
-                    }
-                    parent.returnData = returnData;
-                    parent.decodedReturnData = decodedReturnData;
-                }
-                if (currentStep.op === "REVERT") {
-                    parent.reverted = true;
-                    const { returnData } = _parseReturnData(
-                        currentStep,
-                        (abiDecoder as any)._selectorToFunctionInfo[
-                            `0x${parent.signature}`
-                        ]
-                    );
-                    try {
-                        const decoded = abiDecoder.decodeCalldataOrThrow(
-                            `0x${returnData}`
+                    aTrace.decodedOutput = {
+                        error: decodedRevertError.name,
+                        args: decodedRevertError.values,
+                    };
+                } else {
+                    const encoders: any = (abiDecoder as any)
+                        ._selectorToFunctionInfo[aTrace.input.slice(0, 10)];
+
+                    if (encoders && encoders.length > 0) {
+                        aTrace.decodedOutput = encoders[0].abiEncoder.decodeReturnValues(
+                            aTrace.output
                         );
-                        parent.decodedReturnData = decoded.functionArguments;
-                    } catch (e) {
-                        try {
-                            const decodedRevertError = RevertError.decode(
-                                `0x${returnData}`
-                            );
-                            parent.decodedReturnData = {
-                                error: decodedRevertError.name,
-                                args: decodedRevertError.values,
-                            };
-                        } catch (e) {}
                     }
                 }
-            }
-            if (LOG_OP_CODES.includes(currentStep.op)) {
-                const parent = parentByDepth[currentStep.depth - 1];
-                const decodedEvent = _parseEvent(currentStep, abiDecoder);
-                if (decodedEvent) {
-                    parent.events = parent.events || [];
-                    parent.events.push(decodedEvent);
+            } catch (e) {}
+            // Calls
+            aTrace.calls = (gethTrace.calls || []).map((c) => annotateTrace(c));
+            // Event
+            aTrace.events = (gethTrace.events || []).map((event) => {
+                const gas = parseInt(event.gas, 16);
+                const gasUsed = parseInt(event.gasUsed, 16);
+                try {
+                    const decoded = abiDecoder.tryToDecodeLogOrNoop({
+                        address: "0x",
+                        logIndex: 0,
+                        transactionIndex: 0,
+                        transactionHash: "0x",
+                        blockHash: "0x",
+                        blockNumber: 1,
+                        // Call Tracer doesn't return these as 32 bytes
+                        // We pad which could be a bad idea
+                        topics: event.topics.map(
+                            (t) => `0x${_.padStart(t, 64, "0")}`
+                        ),
+                        data: event.input,
+                    });
+                    return {
+                        ...event,
+                        name:
+                            (decoded as LogWithDecodedArgs<any>).event ||
+                            event.topics[0],
+                        args: (decoded as LogWithDecodedArgs<any>).args,
+                        gas,
+                        gasUsed,
+                    };
+                } catch (err) {
+                    console.log(err);
+                    return { ...event, gas, gasUsed };
                 }
-            }
-        }
+            });
+
+            return aTrace;
+        };
+
+        const annotatedTrace = annotateTrace(customTrace);
         return annotatedTrace;
     }
 
@@ -316,62 +187,27 @@ export class Trace extends Command {
         opts: { compact: boolean }
     ): Promise<void> {
         const { tx, web3 } = state;
-        let trace: GethTrace;
-        let txDetail: { to: string; from: string; data: string; value: string };
+        let trace: GethCustomCallTrace;
+        const traceOpts = {
+            disableStorage: true,
+            disableMemory: false,
+            tracer: TRACER,
+        };
         if (tx.startsWith("0x")) {
             // https://geth.ethereum.org/docs/rpc/ns-debug#debug_tracetransaction
             trace = await web3.sendRawPayloadAsync({
                 method: "debug_traceTransaction",
-                params: [tx, { disableStorage: true, disableMemory: false }],
+                params: [tx, traceOpts],
             });
-            const txDetails = await web3.getTransactionByHashAsync(tx);
-            txDetail = {
-                from: txDetails.from,
-                to: txDetails.to!,
-                data: txDetails.input,
-                value: txDetails.value.toString(),
-            };
-        }
-        if (tx.startsWith("http")) {
-            const tracer = fs
-                .readFileSync(path.join(__dirname, "../", "call_tracer.js"))
-                .toString();
+        } else if (tx.startsWith("http")) {
             const response = await (await fetch(tx)).json();
-            txDetail = {
+            const txDetail = {
                 from: response.from,
                 to: response.to,
                 data: response.data,
                 value: response.value,
             };
-            const payload = {
-                method: "debug_traceCall",
-                params: [
-                    {
-                        ...txDetail,
-                        value: `0x${new BigNumber(txDetail.value).toString(
-                            16
-                        )}`,
-                        gas: `0x${new BigNumber(response.gas).toString(16)}`,
-                    },
-                    "latest",
-                    {
-                        disableStorage: true,
-                        disableMemory: false,
-                        tracer,
-                    },
-                ],
-            };
-
-            let timeBefore = Date.now();
-            const customTrace = await web3.sendRawPayloadAsync(payload);
-            let timeAfter = Date.now();
-            console.log(
-                "time",
-                timeAfter - timeBefore,
-                "size",
-                JSON.stringify(customTrace).length
-            );
-            timeBefore = Date.now();
+            // https://geth.ethereum.org/docs/rpc/ns-debug#debug_tracecall
             trace = await web3.sendRawPayloadAsync({
                 method: "debug_traceCall",
                 params: [
@@ -383,29 +219,24 @@ export class Trace extends Command {
                         gas: `0x${new BigNumber(response.gas).toString(16)}`,
                     },
                     "latest",
-                    { disableStorage: true, disableMemory: false },
+                    traceOpts,
                 ],
             });
-            timeAfter = Date.now();
-            console.log(
-                "time",
-                timeAfter - timeBefore,
-                "size",
-                JSON.stringify(trace).length
-            );
-            console.log(JSON.stringify(customTrace, null, 2));
         } else {
             throw new Error(`Invalid tx: ${tx}`);
         }
+
+        const annotatedTrace = Trace._annotateGethTrace(trace, web3.abiDecoder);
 
         const semanticAddressNames = {
             ...utils.loadContractAddressNames(),
             "0xdef1c0ded9bec7f1a1670819833240f027b25eff": "ExchangeProxy",
             "0x22f9dcf4647084d6c31b2765f6910cd85c178c18": "FlashWallet",
             "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee": "ETH",
-            [txDetail.from]: "Sender",
-            [txDetail.to!]: "To",
+            [annotatedTrace.from]: "Sender",
+            [annotatedTrace.to]: "To",
         } as { [address: string]: string | undefined };
+
         const truncate = <T>(a: T): T => {
             if (!opts.compact) {
                 return a;
@@ -462,9 +293,9 @@ export class Trace extends Command {
             return inspect(a);
         };
 
-        const semanticOp = (l: AnnotatedTraceLine): string => {
+        const semanticOp = (l: AnnotatedGethCustomCallTrace): string => {
             const length = 4;
-            switch (l.op) {
+            switch (l.type) {
                 case "CALL":
                     return _.padEnd("[C]", length, " ");
                 case "CALLCODE":
@@ -480,62 +311,59 @@ export class Trace extends Command {
             }
         };
 
-        const printLine = (l: AnnotatedTraceLine) => {
+        const pad = "  ";
+        const printTrace = (
+            l: AnnotatedGethCustomCallTrace,
+            paddingOffset: number = 0
+        ) => {
             const prefix = semanticOp(l);
-            const pad = "  ";
-            const padding = [...Array(l.depth)].map(() => pad).join("");
-            const status = l.reverted ? colors.error(`[REVERT]`) : "";
-            const returnData = l.decodedReturnData
-                ? Object.values(l.decodedReturnData)
+            const padding = _.times(paddingOffset)
+                .map(() => pad)
+                .join("");
+            const returnData = l.decodedOutput
+                ? Object.values(l.decodedOutput)
                       .map((v) => semanticValue(v))
                       .join(", ")
-                : l.returnData
-                ? semanticValue(l.returnData)
+                : l.output
+                ? semanticValue(l.output)
                 : "0x";
-            const call = `${colors.yellow(semanticValue(l.address))}.${
-                l.decodedCallData ? l.decodedCallData.functionName : l.signature
+            const call = `${colors.yellow(semanticValue(l.to))}.${
+                l.decodedInput ? l.decodedInput.functionName : l.signature
             }(${
-                l.decodedCallData
-                    ? Object.entries(l.decodedCallData.functionArguments)
+                l.decodedInput
+                    ? Object.entries(l.decodedInput.functionArguments)
                           .map(([a, b]) => `${a}=${semanticValue(b)}`)
                           .join(", ")
                     : `...`
             }) => ${l.reverted ? colors.red(returnData) : returnData}`;
             const str = [
-                prefix,
-                `[${_.padStart(l.gasCost.toString(), 6, " ")}] `,
+                l.reverted ? colors.error(prefix) : prefix,
+                `[${_.padStart(l.gasUsed.toString(), 6, " ")}] `,
                 padding,
-                status,
                 call,
             ].join("");
+
             console.log(str);
-            l.subCalls.forEach((ll) => printLine(ll));
-            l.events &&
-                l.events.forEach((e) =>
-                    console.log(
-                        [
-                            colors.green(_.padEnd("[E]", 4, " ")),
-                            `[${_.padStart(e.gasCost.toString(), 6, " ")}] `,
-                            padding,
-                            pad,
-                            colors.green(e.event),
-                            "(",
-                            Object.entries(e.args)
-                                .map(([k, v]) => `${k}=${semanticValue(v)}`)
-                                .join(", "),
-                            ")",
-                        ].join("")
-                    )
+            l.calls.forEach((c) => printTrace(c, paddingOffset + 1));
+            l.events.forEach((e) => {
+                console.log(
+                    [
+                        colors.green(_.padEnd("[E]", 4, " ")),
+                        `[${_.padStart(e.gasUsed.toString(), 6, " ")}] `,
+                        padding,
+                        pad,
+                        colors.green(e.name || semanticValue(e.topics[0])),
+                        "(",
+                        Object.entries(e.args || {})
+                            .map(([k, v]) => `${k}=${semanticValue(v)}`)
+                            .join(", "),
+                        ")",
+                    ].join("")
                 );
+            });
         };
 
-        const annotated = Trace._decodeGethTrace(
-            trace,
-            web3.abiDecoder,
-            txDetail.to,
-            txDetail.data
-        );
-        printLine(annotated);
+        printTrace(annotatedTrace);
     }
 
     // tslint:disable-next-line:async-suffix

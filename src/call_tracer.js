@@ -49,7 +49,8 @@
 				gasIn:   log.getGas(),
 				gasCost: log.getCost(),
 				value:   '0x' + log.stack.peek(0).toString(16),
-                events: []
+                events: [],
+                reverted: false,
 			};
 			this.callstack.push(call);
 			this.descended = true
@@ -68,7 +69,8 @@
 				gasIn:   log.getGas(),
 				gasCost: log.getCost(),
 				value:   '0x' + db.getBalance(log.contract.getAddress()).toString(16),
-                events: []
+                events: [],
+                reverted: false,
 			});
 			return
 		}
@@ -94,7 +96,8 @@
 				gasCost: log.getCost(),
 				outOff:  log.stack.peek(4 + off).valueOf(),
 				outLen:  log.stack.peek(5 + off).valueOf(),
-                events: []
+                events: [],
+                reverted: false,
 			};
 			if (op != 'DELEGATECALL' && op != 'STATICCALL') {
 				call.value = '0x' + log.stack.peek(2).toString(16);
@@ -116,9 +119,17 @@
 			}
 			this.descended = false;
 		}
+
 		// If an existing call is returning, pop off the call stack
 		if (syscall && op == 'REVERT') {
-			this.callstack[this.callstack.length - 1].error = "execution reverted";
+            var parent = this.callstack[this.callstack.length - 1];
+			parent.error = "execution reverted";
+			parent.reverted = true;
+
+            var inOff = log.stack.peek(0).valueOf();
+            var inEnd = inOff + log.stack.peek(1).valueOf();
+            parent.output = toHex(log.memory.slice(inOff, inEnd));
+
 			return;
 		}
 
@@ -133,10 +144,12 @@
             // Memory input for non-indexed data
             var inOff = log.stack.peek(0).valueOf();
             var inEnd =  inOff + log.stack.peek(1).valueOf();
-            var parent = this.callstack[this.callstack.length -1];
+            var parent = this.callstack[this.callstack.length - 1];
             parent && parent.events.push({
+				gas:     '0x' + bigInt(log.getGas()).toString(16),
+				gasUsed: '0x' + bigInt(log.getCost()).toString(16),
                 topics,
-                input: toHex(log.memory.slice(inOff, inEnd)),
+                input:   toHex(log.memory.slice(inOff, inEnd)),
                 address: toHex(log.contract.getAddress())
             });
         }
@@ -228,17 +241,20 @@
 			output:  toHex(ctx.output),
             events: ctx.events,
 			time:    ctx.time,
+            reverted: false,
 		};
 		if (this.callstack[0].calls !== undefined) {
 			result.calls = this.callstack[0].calls;
 		}
 		if (this.callstack[0].error !== undefined) {
 			result.error = this.callstack[0].error;
+            result.reverted = true;
 		} else if (ctx.error !== undefined) {
 			result.error = ctx.error;
+            result.reverted = true;
 		}
 		if (result.error !== undefined && (result.error !== "execution reverted" || result.output ==="0x")) {
-			delete result.output;
+            result.reverted = true;
 		}
 		return this.finalize(result);
 	},
@@ -260,6 +276,7 @@
 			time:    call.time,
 			calls:   call.calls,
             events:  call.events,
+            reverted: call.reverted,
 		}
 		for (var key in sorted) {
 			if (sorted[key] === undefined) {
