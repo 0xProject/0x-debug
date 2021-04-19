@@ -5,11 +5,13 @@ import { utils } from "../utils";
 import inquirer = require("inquirer");
 import Web3ProviderEngine = require("web3-provider-engine");
 import _ = require("lodash");
-import { AbiEncoder, BigNumber } from "@0x/utils";
+import { BigNumber } from "@0x/utils";
 var colors = require("colors/safe");
 import * as nodeUtil from "util";
 import { LogWithDecodedArgs } from "../../../workspace-remote/workspace/tools/ethereum-types/lib";
 import { RevertError } from "@0x/protocol-utils";
+import * as fs from "fs";
+import * as path from "path";
 
 colors.setTheme({
     address: "yellow",
@@ -55,6 +57,38 @@ interface AnnotatedTraceLine {
     decodedReturnData?: any;
     reverted?: boolean;
     events?: { event: string; args: any; gasCost: number }[];
+}
+
+interface GethCustomEventTrace {
+    topics: string[]; // hex, no padding, no prefix
+    input: string; // hex, prefix, padded
+}
+
+interface GethCustomCallTrace {
+    type: string;
+    from: string;
+    to: string;
+    gas: string; // hex encoded value
+    gasUsed: string; // hex encoded value
+    input: string;
+    output: string;
+    calls: GethCustomCallTrace[];
+    events: GethCustomEventTrace[];
+}
+
+interface AnnotatedGethCustomEventTrace extends GethCustomEventTrace {
+    name: string;
+    args: any;
+}
+
+interface AnnotatedGethCustomCallTrace
+    extends Omit<GethCustomCallTrace, "gas" | "gasUsed" | "calls" | "events"> {
+    decodedInput?: DecodedCalldata;
+    decodedOutput?: any;
+    gas: number;
+    gasUsed: number;
+    calls: AnnotatedGethCustomCallTrace[];
+    events: AnnotatedGethCustomEventTrace[];
 }
 
 const CALL_OP_CODES = ["CALL", "CALLCODE", "STATICCALL", "DELEGATECALL"];
@@ -299,6 +333,9 @@ export class Trace extends Command {
             };
         }
         if (tx.startsWith("http")) {
+            const tracer = fs
+                .readFileSync(path.join(__dirname, "../", "call_tracer.js"))
+                .toString();
             const response = await (await fetch(tx)).json();
             txDetail = {
                 from: response.from,
@@ -306,6 +343,35 @@ export class Trace extends Command {
                 data: response.data,
                 value: response.value,
             };
+            const payload = {
+                method: "debug_traceCall",
+                params: [
+                    {
+                        ...txDetail,
+                        value: `0x${new BigNumber(txDetail.value).toString(
+                            16
+                        )}`,
+                        gas: `0x${new BigNumber(response.gas).toString(16)}`,
+                    },
+                    "latest",
+                    {
+                        disableStorage: true,
+                        disableMemory: false,
+                        tracer,
+                    },
+                ],
+            };
+
+            let timeBefore = Date.now();
+            const customTrace = await web3.sendRawPayloadAsync(payload);
+            let timeAfter = Date.now();
+            console.log(
+                "time",
+                timeAfter - timeBefore,
+                "size",
+                JSON.stringify(customTrace).length
+            );
+            timeBefore = Date.now();
             trace = await web3.sendRawPayloadAsync({
                 method: "debug_traceCall",
                 params: [
@@ -320,6 +386,14 @@ export class Trace extends Command {
                     { disableStorage: true, disableMemory: false },
                 ],
             });
+            timeAfter = Date.now();
+            console.log(
+                "time",
+                timeAfter - timeBefore,
+                "size",
+                JSON.stringify(trace).length
+            );
+            console.log(JSON.stringify(customTrace, null, 2));
         } else {
             throw new Error(`Invalid tx: ${tx}`);
         }
